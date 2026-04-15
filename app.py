@@ -459,7 +459,7 @@ class Factor:
     desc: str
 
 # 15 factors × 6.66 default weight ≈ 100 total | each slider: 0–10
-_W = 10.00
+_W = 6.66
 FACTORS = [
     Factor("capital",      "Paid-up Capital",        _W, "₹1Cr–₹25Cr is ideal for SME IPO eligibility"),
     Factor("headroom",     "Capital Headroom",        _W, "Higher auth–paid gap supports fresh equity raising"),
