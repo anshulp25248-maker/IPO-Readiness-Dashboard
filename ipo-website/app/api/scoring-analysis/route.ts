@@ -104,6 +104,33 @@ function parseJson(content: string) {
   throw lastError instanceof Error ? lastError : new Error("AI returned invalid JSON");
 }
 
+function extractQuotedValue(content: string, key: string) {
+  const pattern = new RegExp(`"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`,"s");
+  const match = content.match(pattern);
+  if (!match) return "";
+  try {
+    return JSON.parse(`"${match[1]}"`) as string;
+  } catch {
+    return match[1].replace(/\\"/g, '"').replace(/\\n/g, "\n");
+  }
+}
+
+function extractStringArray(content: string, key: string) {
+  const pattern = new RegExp(`"${key}"\\s*:\\s*\\[([\\s\\S]*?)\\]`, "s");
+  const match = content.match(pattern);
+  if (!match) return [];
+  return [...match[1].matchAll(/"((?:\\.|[^"\\])*)"/g)]
+    .map((item) => {
+      try {
+        return JSON.parse(`"${item[1]}"`) as string;
+      } catch {
+        return item[1].replace(/\\"/g, '"').replace(/\\n/g, " ");
+      }
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
 function clampScore(value: unknown, fallback: number) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
@@ -122,7 +149,7 @@ function normalizeInsights(companies: Company[], scores: Record<string, number> 
     return {
       companyId: company.id,
       companyName: insight.companyName || company.name,
-      aiScore: clampScore(insight.aiScore, deterministicScore),
+      aiScore: clampScore(deterministicScore, deterministicScore),
       recommendation:
         insight.recommendation ||
         (deterministicScore >= 85 ? "Watchlist" : deterministicScore >= 70 ? "Data Insufficient" : "Reject"),
@@ -162,27 +189,41 @@ function fallbackInsights(companies: Company[], scores?: Record<string, number>,
 }
 
 function narrativeInsights(companies: Company[], scores: Record<string, number> | undefined, aiText: string, sourceStatus: string) {
-  const narrative = aiText.replace(/\s+/g, " ").slice(0, 420);
+  const extractedReport = extractQuotedValue(aiText, "report");
+  const narrative = (extractedReport || aiText)
+    .replace(/[{}[\]"]/g, " ")
+    .replace(/\s+/g, " ")
+    .slice(0, 700);
   return companies.map((company) => {
     const score = scores?.[company.id] ?? 0;
+    const extractedRationale = extractQuotedValue(aiText, "rationale");
+    const strengths = extractStringArray(aiText, "strengths");
+    const redFlags = extractStringArray(aiText, "redFlags");
+    const missingData = extractStringArray(aiText, "missingData");
     return {
       companyId: company.id,
       companyName: company.name,
       aiScore: Math.max(0, Math.min(100, Math.round(score))),
       recommendation: score >= 85 ? "Watchlist" : score >= 70 ? "Data Insufficient" : "Reject",
-      rationale: narrative
-        ? `${narrative} This narrative was returned by the AI provider but was not valid JSON, so the score remains anchored to parsed data.`
-        : `AI returned a non-structured response. ${sourceStatus}`,
-      strengths: [
-        `Parsed score is ${Math.round(score)}/100.`,
-        `Business-model score is ${company.factors.businessModel.toFixed(1)}/10.`,
-      ],
-      redFlags: [
-        company.lastFiling === "NA" || company.lastFiling === "Data Not Available"
-          ? "Filing date is not available in uploaded data."
-          : "",
-      ].filter(Boolean),
-      missingData: ["Structured AI JSON was not returned."],
+      rationale:
+        extractedRationale ||
+        (narrative
+          ? `${narrative} The parser score remains the controlling score because uploaded data is the source of truth.`
+          : `The AI provider returned an incomplete response. ${sourceStatus}`),
+      strengths: strengths.length
+        ? strengths
+        : [
+            `POSITIVE: Parsed Scout Score is ${Math.round(score)}/100, derived from the selected scoring factors rather than model opinion.`,
+            `POSITIVE: Business-model score is ${company.factors.businessModel.toFixed(1)}/10 based on uploaded NIC/activity scarcity logic.`,
+          ],
+      redFlags: redFlags.length
+        ? redFlags
+        : [
+            company.lastFiling === "NA" || company.lastFiling === "Data Not Available"
+              ? "RED FLAG: Filing date is not available in uploaded data and should be verified before investment underwriting."
+              : "",
+          ].filter(Boolean),
+      missingData: missingData.length ? missingData : ["Structured AI JSON was incomplete and was repaired into a usable insight."],
     };
   });
 }
@@ -249,7 +290,7 @@ ${sourceStatus}
 
 ${sourceContext(results)}
 
-Return strict JSON only:
+Return strict JSON only. Do not wrap JSON in markdown. Do not include a second JSON object. Do not add comments. Escape every newline inside strings as \\n.
 {
   "report": "short markdown portfolio-level analyst note",
   "insights": [
@@ -267,6 +308,7 @@ Return strict JSON only:
 }
 
 AI score should reflect public-data confidence, sector attractiveness, business-model uniqueness, management/compliance evidence, red flags, and missing-data penalties.
+The aiScore field must equal the deterministicScore supplied in COMPANY DATA. The AI layer may explain risk and public-source confidence, but it must not change the parser score.
 
 ${scoringJsonReportFormat}`;
 
