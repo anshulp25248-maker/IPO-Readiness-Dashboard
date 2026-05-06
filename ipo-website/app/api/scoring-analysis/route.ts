@@ -73,6 +73,7 @@ function fallbackInsights(companies: Company[], scores?: Record<string, number>,
 
 async function aiJson(prompt: string) {
   const result = await generateAiText({
+    task: "scoring",
     system: "Return only valid compact JSON. Never hallucinate.",
     prompt,
     temperature: 0.05,

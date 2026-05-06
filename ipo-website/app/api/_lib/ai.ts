@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 type GenerateOptions = {
+  task?: "scoring" | "company-search" | "cdr" | "competitor" | "director";
   system?: string;
   prompt: string;
   temperature?: number;
@@ -40,12 +41,36 @@ export function envValue(key: string) {
   return "";
 }
 
-function providerOrder() {
+const taskProviderOrder: Record<NonNullable<GenerateOptions["task"]>, string[]> = {
+  scoring: ["gemini", "openrouter", "groq"],
+  "company-search": ["openrouter", "gemini", "groq"],
+  cdr: ["gemini", "openrouter", "groq"],
+  competitor: ["groq", "openrouter", "gemini"],
+  director: ["openrouter", "gemini", "groq"],
+};
+
+function envTaskKey(base: string, task?: GenerateOptions["task"]) {
+  return task ? `${base}_${task.replace(/-/g, "_").toUpperCase()}` : base;
+}
+
+function providerOrder(task?: GenerateOptions["task"]) {
+  const taskSpecific = envValue(envTaskKey("AI_PROVIDER_ORDER", task))
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  if (taskSpecific.length) return taskSpecific;
+
   const requested = envValue("AI_PROVIDER_ORDER")
     .split(",")
     .map((item) => item.trim().toLowerCase())
     .filter(Boolean);
-  return requested.length ? requested : ["gemini", "groq", "openrouter"];
+  if (requested.length) return requested;
+
+  return task ? taskProviderOrder[task] : ["gemini", "openrouter", "groq"];
+}
+
+function taskModel(base: string, fallback: string, task?: GenerateOptions["task"]) {
+  return envValue(envTaskKey(base, task)) || envValue(base) || fallback;
 }
 
 function compactError(provider: string, response: Response, body: string) {
@@ -57,7 +82,11 @@ async function callGemini(options: GenerateOptions): Promise<AiResult> {
   const apiKey = envValue("GEMINI_API_KEY") || envValue("GOOGLE_API_KEY");
   if (!apiKey) throw new Error("Gemini key not configured");
 
-  const model = envValue("GEMINI_MODEL") || "gemini-2.5-flash-lite";
+  const model = taskModel(
+    "GEMINI_MODEL",
+    options.task === "cdr" ? "gemini-2.5-flash" : "gemini-2.5-flash-lite",
+    options.task,
+  );
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
@@ -91,7 +120,7 @@ async function callGroq(options: GenerateOptions): Promise<AiResult> {
   const apiKey = envValue("GROQ_API_KEY");
   if (!apiKey) throw new Error("Groq key not configured");
 
-  const preferred = envValue("GROQ_MODEL") || "llama-3.1-8b-instant";
+  const preferred = taskModel("GROQ_MODEL", "llama-3.1-8b-instant", options.task);
   const models = preferred === "llama-3.1-8b-instant" ? [preferred] : [preferred, "llama-3.1-8b-instant"];
   let lastError = "";
 
@@ -128,7 +157,7 @@ async function callOpenRouter(options: GenerateOptions): Promise<AiResult> {
   const apiKey = envValue("OPENROUTER_API_KEY");
   if (!apiKey) throw new Error("OpenRouter key not configured");
 
-  const model = envValue("OPENROUTER_MODEL") || "openrouter/free";
+  const model = taskModel("OPENROUTER_MODEL", "openrouter/free", options.task);
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -168,7 +197,7 @@ export async function generateAiText(options: GenerateOptions): Promise<AiResult
   };
   const errors: string[] = [];
 
-  for (const provider of providerOrder()) {
+  for (const provider of providerOrder(options.task)) {
     if (!(provider in calls) || !configured[provider as keyof typeof configured]) continue;
     try {
       return await calls[provider as keyof typeof calls](options);

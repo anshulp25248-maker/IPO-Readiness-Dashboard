@@ -192,6 +192,7 @@ Return strict JSON only:
 }`;
 
   const result = await generateAiText({
+    task: "company-search",
     system: "Return only valid JSON. You are careful, source-aware, and mark missing information as NA.",
     prompt,
     temperature: 0.12,

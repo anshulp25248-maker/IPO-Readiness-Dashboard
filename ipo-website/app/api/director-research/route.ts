@@ -56,6 +56,7 @@ Return a detailed markdown report with:
 9. Sources used`;
 
     const ai = await generateAiText({
+      task: "director",
       system: "You are a cautious investment-banking KYC and promoter diligence analyst. Separate facts from inference.",
       prompt,
       temperature: 0.1,

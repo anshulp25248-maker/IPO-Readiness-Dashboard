@@ -62,6 +62,7 @@ Return markdown with:
 8. Suggested diligence questions`;
 
     const ai = await generateAiText({
+      task: "competitor",
       system: "You are a competition and business-model diligence analyst for private-company investing.",
       prompt,
       temperature: 0.12,

@@ -236,6 +236,7 @@ FINAL INSTRUCTIONS:
 - The final report should be detailed enough that a reader can make an informed decision on whether to invest, lend to, or partner with this company without needing follow-up questions.`;
 
     const ai = await generateAiText({
+      task: "cdr",
       system: "You are Scout Smarter, an investment banking analyst preparing a first-pass company diligence report. Be detailed, source-aware, skeptical, and never hallucinate.",
       prompt,
       temperature: 0.12,
