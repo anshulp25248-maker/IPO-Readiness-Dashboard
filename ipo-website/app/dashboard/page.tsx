@@ -5,7 +5,16 @@ import { FactorGrid, GlassPanel, ScoreBadge, CompanyTable } from "../_components
 import { useScout } from "../_components/ScoutProvider";
 
 export default function DashboardPage() {
-  const { rankedCompanies, topCompany, scoreCompany, includedFactorCount, aiScoreReport, aiCompanyInsights } = useScout();
+  const {
+    rankedCompanies,
+    topCompany,
+    scoreCompany,
+    includedFactorCount,
+    aiScoreReport,
+    aiCompanyInsights,
+    scoringStatus,
+    runScoring,
+  } = useScout();
   const eligibleCount = rankedCompanies.filter((company) => company.status === "Active").length;
   const topInsight = aiCompanyInsights[topCompany.id];
 
@@ -80,8 +89,15 @@ export default function DashboardPage() {
               ) : null}
             </div>
             <p className="mt-4 rounded-xl bg-white/45 px-4 py-3 text-sm font-semibold leading-6 text-slate-900">
-              {topInsight?.rationale || aiScoreReport || "Upload a file and press Run Scoring to generate the AI scoring layer."}
+              {topInsight?.rationale || aiScoreReport || scoringStatus || "Upload a file and press Run Scoring to generate the AI scoring layer."}
             </p>
+            <button
+              type="button"
+              onClick={() => void runScoring()}
+              className="mt-3 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-indigo-950"
+            >
+              Run AI Layer
+            </button>
             {topInsight?.redFlags?.length ? (
               <div className="mt-3 grid gap-2">
                 {topInsight.redFlags.slice(0, 3).map((flag) => (

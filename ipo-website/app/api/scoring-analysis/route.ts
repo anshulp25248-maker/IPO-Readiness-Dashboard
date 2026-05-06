@@ -47,7 +47,8 @@ async function tavilySearch(query: string) {
 
 function sourceContext(results: SearchResult[]) {
   return results
-    .map((item, index) => `${index + 1}. ${item.title || "Untitled"}\nURL: ${item.url || "NA"}\nSnippet: ${(item.content || "").slice(0, 650)}`)
+    .slice(0, 4)
+    .map((item, index) => `${index + 1}. ${item.title || "Untitled"}\nURL: ${item.url || "NA"}\nSnippet: ${(item.content || "").slice(0, 300)}`)
     .join("\n\n") || "No public feed results returned.";
 }
 
@@ -66,6 +67,64 @@ function parseJson(content: string) {
       missingData?: string[];
     }>;
   };
+}
+
+function fallbackInsights(companies: Company[], scores?: Record<string, number>, reason = "AI provider unavailable") {
+  return companies.map((company) => {
+    const score = scores?.[company.id] ?? 0;
+    const redFlags = [
+      company.lastFiling === "NA" || company.lastFiling === "Data Not Available" ? "Filing date is not available in uploaded data." : "",
+      company.director.credibility?.toLowerCase().includes("limited") ? "Director credibility requires public-source verification." : "",
+      company.paidUpCapital === "Data Not Available" ? "Paid-up capital is missing from uploaded data." : "",
+    ].filter(Boolean);
+
+    return {
+      companyId: company.id,
+      companyName: company.name,
+      aiScore: Math.max(0, Math.min(100, Math.round(score))),
+      recommendation: score >= 85 ? "Watchlist" : score >= 70 ? "Data Insufficient" : "Reject",
+      rationale: `${reason}. Showing a conservative fallback view from uploaded factor scores only; run again after the Groq quota resets for live public-source AI analysis.`,
+      strengths: [
+        `Deterministic Scout Score is ${Math.round(score)}/100.`,
+        `Sector factor is ${company.factors.sector.toFixed(1)}/10 and business-model factor is ${company.factors.businessModel.toFixed(1)}/10.`,
+      ],
+      redFlags,
+      missingData: ["Live Groq qualitative analysis was not returned."],
+    };
+  });
+}
+
+async function groqJson(prompt: string, apiKey: string) {
+  const preferredModel = envValue("GROQ_MODEL") || "llama-3.1-8b-instant";
+  const models = preferredModel === "llama-3.1-8b-instant" ? [preferredModel] : [preferredModel, "llama-3.1-8b-instant"];
+
+  let lastError = "";
+  for (const model of models) {
+    const response = await fetch(groqUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: "Return only valid compact JSON. Never hallucinate." },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.05,
+        max_tokens: 1800,
+      }),
+      cache: "no-store",
+    });
+
+    if (response.ok) {
+      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      return data.choices?.[0]?.message?.content || "{}";
+    }
+
+    lastError = `Groq scoring analysis failed with ${response.status}`;
+    if (response.status !== 429) break;
+  }
+
+  throw new Error(lastError);
 }
 
 function scoringTruth(company: Company, score: number | undefined) {
@@ -92,7 +151,7 @@ export async function POST(request: Request) {
       companies?: Company[];
       scores?: Record<string, number>;
     };
-    const selectedCompanies = (companies || []).slice(0, 10);
+    const selectedCompanies = (companies || []).slice(0, 3);
     if (!selectedCompanies.length) return NextResponse.json({ error: "No companies supplied." }, { status: 400 });
 
     const groqKey = envValue("GROQ_API_KEY");
@@ -101,14 +160,14 @@ export async function POST(request: Request) {
     const query = `${selectedCompanies.slice(0, 5).map((company) => `${company.name} ${company.cin}`).join(" OR ")} MCA Zauba Tofler sector directors India`;
     const results = await tavilySearch(query);
 
-    const prompt = `You are the AI scoring layer for Scout Smarter. The strict quantitative factor score has already been calculated from the uploaded Excel/MCA parser. Your job is to analyze the top companies with Groq using public feed evidence and provide an evidence-aware investment readiness layer.
+    const prompt = `You are the AI scoring layer for Scout Smarter. Analyze uploaded Indian company screening data plus public feed snippets. Keep every statement source-aware and conservative.
 
-Do not invent facts. Use Data Not Available when the feed does not verify a point. Do not override or restate the deterministic uploaded data with conflicting public snippets. The uploaded paid-up capital, authorized capital, CIN, sector/NIC/activity, deterministic factor scores, and deterministic total score are the source of truth. If a public source conflicts with those fields, report it as a discrepancy and recommend manual verification.
+Do not invent facts. Uploaded paid-up capital, authorized capital, CIN, sector/NIC/activity, factor scores, and deterministic total score are the source of truth.
 
-SOURCE-OF-TRUTH COMPANY DATA AND BASE SCORES
+COMPANY DATA
 ${JSON.stringify(selectedCompanies.map((company) => scoringTruth(company, scores?.[company.id])), null, 2)}
 
-LIVE FEED
+PUBLIC FEED
 ${sourceContext(results)}
 
 Return strict JSON only:
@@ -128,26 +187,20 @@ Return strict JSON only:
   ]
 }
 
-AI score should reflect public-data confidence, real-time sector attractiveness, business-model uniqueness from uploaded NIC/activity plus public evidence, management/funding/compliance evidence, red flags, and missing-data penalties. If public evidence is thin, use Data Insufficient and a conservative AI score.`;
+AI score should reflect public-data confidence, sector attractiveness, business-model uniqueness, management/compliance evidence, red flags, and missing-data penalties.`;
 
-    const response = await fetch(groqUrl, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${groqKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: envValue("GROQ_MODEL") || "llama-3.3-70b-versatile",
-        messages: [
-          { role: "system", content: "Return only valid JSON. You are a skeptical investment analyst. Never hallucinate." },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.1,
-        max_tokens: 5500,
-      }),
-      cache: "no-store",
-    });
-
-    if (!response.ok) throw new Error(`Groq scoring analysis failed with ${response.status}`);
-    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const parsed = parseJson(data.choices?.[0]?.message?.content || "{}");
+    let parsed: ReturnType<typeof parseJson>;
+    try {
+      parsed = parseJson(await groqJson(prompt, groqKey));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI provider unavailable";
+      return NextResponse.json({
+        report: `${message}. Conservative fallback generated from uploaded scoring data.`,
+        insights: fallbackInsights(selectedCompanies, scores, message),
+        sources: results.map((item) => ({ title: item.title, url: item.url })),
+        fallback: true,
+      });
+    }
 
     return NextResponse.json({
       report: parsed.report || "AI scoring layer completed.",
