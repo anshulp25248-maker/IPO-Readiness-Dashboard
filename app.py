@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import io
+import json
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -19,15 +21,36 @@ except Exception:
 
 # ── PAGE CONFIG ──────────────────────────────────────────────
 st.set_page_config(
-    page_title="GreenFlow Ventures — Company Intelligence",
-    page_icon="🌿",
+    page_title="Scout Smart",
+    page_icon="SS",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ── CONSTANTS ────────────────────────────────────────────────
 CLAUDE_MODEL  = "claude-sonnet-4-6"
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
+TAVILY_URL = "https://api.tavily.com/search"
+MIN_PAID_UP_CAPITAL = 1_000_000.0
+
+def load_env_file() -> None:
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if not os.path.exists(env_path):
+        return
+    with open(env_path, "r", encoding="utf-8") as env_file:
+        for raw_line in env_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                os.environ[key] = value
+
+load_env_file()
 
 # ── COMPREHENSIVE INDIA LOCATION DETECTION ──────────────────
 # Maps every major city, district, ROC code, and CIN state code
@@ -478,6 +501,46 @@ FACTORS = [
     Factor("regulatory",   "Regulatory Environment", _W, "Regulatory tailwinds and SEBI listing appetite for sector"),
 ]
 
+# Scout Smart overrides the legacy 15-factor IPO score with a focused seven-factor
+# origination model built for unlisted-company discovery.
+FACTORS = [
+    Factor("paid_up_capital", "Paid-up Capital", 18, "Log-normalized against the largest eligible company in the upload"),
+    Factor("sector", "Sector Strength", 18, "Static NIC/sector tier with optional live research deep scan"),
+    Factor("geography", "Geography", 12, "Tier 1 / Tier 2 / Tier 3 city scoring from registered address"),
+    Factor("business_model", "Business Model Scarcity", 14, "Rewards rarer NIC + activity combinations in the uploaded file"),
+    Factor("director_profile", "Director Profile", 14, "Automated DIN/directorship proxy; missing director data is marked NA"),
+    Factor("capital_ratio", "Auth / Paid-up Ratio", 12, "Paid-up capital utilization of authorized capital"),
+    Factor("filing_compliance", "Filing Compliance", 12, "Active status plus recency of MCA/GST filing when available"),
+]
+
+SECTOR_TIER_SCORE = {
+    "Defence": 10.0,
+    "Technology": 9.4,
+    "Healthcare": 9.2,
+    "Renewable Energy": 9.0,
+    "Financial Services": 8.4,
+    "Manufacturing": 7.2,
+    "Logistics": 6.8,
+    "Infrastructure": 6.4,
+    "Agriculture": 6.2,
+    "Consumer": 5.8,
+    "Education": 5.6,
+    "Other": 4.0,
+}
+
+TIER_1_CITIES = {
+    "mumbai", "delhi", "new delhi", "bengaluru", "bangalore", "hyderabad",
+    "chennai", "pune", "ahmedabad", "kolkata", "gurgaon", "gurugram", "noida",
+}
+TIER_2_CITIES = {
+    "surat", "jaipur", "lucknow", "kanpur", "nagpur", "indore", "thane", "bhopal",
+    "visakhapatnam", "patna", "vadodara", "ghaziabad", "ludhiana", "agra",
+    "nashik", "faridabad", "meerut", "rajkot", "varanasi", "ranchi",
+    "coimbatore", "jabalpur", "gwalior", "vijayawada", "jodhpur", "madurai",
+    "raipur", "kota", "guwahati", "chandigarh", "kochi", "bhubaneswar",
+    "dehradun", "mysore", "mysuru", "jamshedpur", "cuttack",
+}
+
 # ─── CSS — GREENFLOW PROFESSIONAL LIGHT THEME ───────────────
 def inject_css() -> None:
     st.markdown("""
@@ -726,6 +789,88 @@ def get_val(row: pd.Series, cols: list, default: str="") -> str:
         if v and v.lower() not in ("nan","none",""): return v
     return default
 
+def clean_na(value: Any) -> str:
+    text = str(value).strip() if value is not None else ""
+    return "NA" if not text or text.lower() in {"nan", "none", "null", "na", "n/a", "-"} else text
+
+def parse_date_any(value: Any) -> pd.Timestamp | pd.NaT:
+    if value is None:
+        return pd.NaT
+    parsed = pd.to_datetime(value, errors="coerce", dayfirst=True)
+    return parsed
+
+def detect_city_tier(state: str, address: str) -> tuple[int, float]:
+    text = f"{state} {address}".lower()
+    if any(city in text for city in TIER_1_CITIES):
+        return 1, 10.0
+    if any(city in text for city in TIER_2_CITIES):
+        return 2, 7.0
+    return 3, 4.0
+
+def capital_ratio_score(paid: float, authorized: float) -> float:
+    if authorized <= 0 or paid <= 0:
+        return 0.0
+    ratio = paid / authorized
+    if ratio >= 1:
+        return 10.0
+    if ratio > 0.80:
+        return 9.0
+    if ratio >= 0.50:
+        return 8.0
+    if ratio >= 0.20:
+        return 6.0
+    return 1.0
+
+def filing_score(last_filing: Any, has_filing_data: bool) -> tuple[float, str]:
+    if not has_filing_data:
+        return 0.0, "NA"
+    filed_at = parse_date_any(last_filing)
+    if pd.isna(filed_at):
+        return 0.0, "Reject: filing date missing"
+    months = max(0, (pd.Timestamp.today().year - filed_at.year) * 12 + pd.Timestamp.today().month - filed_at.month)
+    if months <= 6:
+        return 10.0, f"{months} months"
+    if months <= 12:
+        return 7.0, f"{months} months"
+    if months <= 24:
+        return 4.0, f"{months} months"
+    return 0.0, "Reject: filing older than 24 months"
+
+def is_active_status(status: Any) -> bool:
+    text = clean_na(status).lower()
+    if text == "NA":
+        return False
+    if any(token in text for token in ["inactive", "not active", "strike", "struck", "dormant", "liquidat", "under process"]):
+        return False
+    return "active" in text
+
+def director_profile_score(row: pd.Series) -> tuple[float, str]:
+    directorships = parse_money(row.get("director_directorships", ""))
+    director_text = clean_na(row.get("directors", ""))
+    education_text = clean_na(row.get("director_education", ""))
+    public_hits = parse_money(row.get("director_public_hits", ""))
+
+    has_degree = bool(re.search(r"\b(b\.?tech|m\.?tech|mba|ms|m\.?s\.?|ca|cfa|iim|iit|isb|bits|top\s*50)\b", education_text, re.I))
+    if directorships >= 3:
+        base = 10.0
+    elif directorships == 2:
+        base = 7.0
+    elif directorships == 1:
+        base = 4.0
+    elif director_text != "NA":
+        names = re.split(r"[,;/|]+|\band\b", director_text)
+        base = 5.0 if len([n for n in names if n.strip()]) >= 2 else 4.0
+    else:
+        return 0.0, "NA"
+
+    if has_degree and directorships >= 2:
+        return 10.0, "Verified degree + multiple directorships"
+    if has_degree:
+        return max(base, 5.0), "Professional education signal"
+    if public_hits >= 2:
+        return min(10.0, base + 1.0), "Public profile signal"
+    return base, "Automated MCA/director proxy"
+
 def links(name: str, cin: str) -> dict:
     q = urlparse.quote(name or cin)
     return {
@@ -761,12 +906,17 @@ def parse_rows(df: pd.DataFrame) -> pd.DataFrame:
         cd     = parse_cin(cin)
         roc    = get_val(row, ["ROC","Roc"])
         act    = get_val(row, ["ACTIVITY DESCRIPTION","Principal Business Activity","Business Activity"], "General")
+        nic    = get_val(row, ["NIC Code","NIC CODE","NIC","Activity Code","ACTIVITY CODE","Industrial Class","NIC 2008"], "")
         name   = get_val(row, ["COMPANY NAME","Company Name","COMPANY_NAME","LIMITED LIABILITY PARTNERSHIP NAME"], "Unknown")
         paid   = parse_money(get_val(row, ["PAIDUP CAPITAL","Paid Up Capital","Paid Up Capital (in Rs.)"]))
         auth   = parse_money(get_val(row, ["AUTHORIZED CAPITAL","Authorised Capital","Authorised Capital (in Rs.)"])) or paid
         inc    = get_val(row, ["DATE OF INCORPORATION","DATE OF REGISTRATION"])
         email  = get_val(row, ["EMAIL","Email","Email ID of the Company"])
         addr   = get_val(row, ["REGISTERED OFFICE ADDRESS","Registered Office Address"])
+        filing = get_val(row, ["Latest Filing Date","Last Filing Date","Date of Last AGM","Last AGM Date","Last Balance Sheet Date","GST Last Filing Date","Last Filed"], "")
+        directors = get_val(row, ["Directors","Director Names","DIRECTOR NAME","Director Name","Key Directors"], "")
+        director_directorships = get_val(row, ["Director Directorships","No. of Directorships","Directorship Count","DIN Directorship Count"], "")
+        director_education = get_val(row, ["Director Education","Education","Director Qualification","Qualification"], "")
         state  = detect_state(row, cd, roc)
         rows.append({
             "company_name":       name,
@@ -775,6 +925,7 @@ def parse_rows(df: pd.DataFrame) -> pd.DataFrame:
             "roc":                roc,
             "status":             get_val(row, ["Company Status","Company Status (for efiling)"], "Active"),
             "activity":           act,
+            "nic_code":           clean_na(nic),
             "sector":             classify_sector(act),
             "paid_up_capital":    paid,
             "authorised_capital": auth,
@@ -782,6 +933,10 @@ def parse_rows(df: pd.DataFrame) -> pd.DataFrame:
             "email":              email,
             "address":            addr,
             "inc_year":           inc or cd["year"] or "",
+            "last_filing_date":   clean_na(filing),
+            "directors":          clean_na(directors),
+            "director_directorships": clean_na(director_directorships),
+            "director_education": clean_na(director_education),
         })
     out = pd.DataFrame(rows).drop_duplicates(subset=["cin","company_name"]).reset_index(drop=True)
     out["score"] = 0
@@ -933,10 +1088,97 @@ def score_one(row: pd.Series, W: dict) -> int:
     tw = sum(w.values())
     return int(round(sum(sm.get(k,0)*w[k] for k in w)/tw))
 
-def apply_scoring(df: pd.DataFrame, W: dict) -> pd.DataFrame:
-    df = df.copy()
-    df["score"] = df.apply(lambda r: score_one(r,W), axis=1)
-    return df.sort_values(["score","paid_up_capital"],ascending=[False,False]).reset_index(drop=True)
+def apply_scoring(df: pd.DataFrame, W: dict, live_sector_scores: dict[str, float] | None = None) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    scored = df.copy()
+    live_sector_scores = live_sector_scores or st.session_state.get("sector_deep_scores", {})
+    for column, default in {
+        "status": "NA", "activity": "NA", "nic_code": "NA", "state": "NA", "address": "NA",
+        "last_filing_date": "NA", "directors": "NA", "director_directorships": "NA",
+        "director_education": "NA", "authorised_capital": 0.0, "paid_up_capital": 0.0,
+    }.items():
+        if column not in scored.columns:
+            scored[column] = default
+
+    scored["paid_up_capital"] = pd.to_numeric(scored["paid_up_capital"], errors="coerce").fillna(0.0)
+    scored["authorised_capital"] = pd.to_numeric(scored["authorised_capital"], errors="coerce").fillna(0.0)
+    scored["authorised_capital"] = scored["authorised_capital"].where(scored["authorised_capital"] > 0, scored["paid_up_capital"])
+
+    active_mask = scored["status"].map(is_active_status)
+    capital_mask = scored["paid_up_capital"] >= MIN_PAID_UP_CAPITAL
+    filing_dates = scored["last_filing_date"].map(parse_date_any)
+    has_filing_data = filing_dates.notna().any()
+
+    scored["rejection_reason"] = ""
+    scored.loc[~active_mask, "rejection_reason"] = "Rejected: company is not active"
+    scored.loc[active_mask & ~capital_mask, "rejection_reason"] = "Rejected: paid-up capital below 10 lakh"
+
+    filing_results = scored["last_filing_date"].map(lambda value: filing_score(value, has_filing_data))
+    scored["filing_compliance_score"] = filing_results.map(lambda item: item[0])
+    scored["filing_status"] = filing_results.map(lambda item: item[1])
+    stale_filing_mask = scored["filing_status"].astype(str).str.startswith("Reject:")
+    scored.loc[active_mask & capital_mask & stale_filing_mask, "rejection_reason"] = scored.loc[active_mask & capital_mask & stale_filing_mask, "filing_status"]
+
+    eligible = scored["rejection_reason"].eq("")
+    max_capital = float(scored.loc[eligible, "paid_up_capital"].max()) if eligible.any() else float(scored["paid_up_capital"].max())
+    max_log = math.log(max(max_capital, 1.0))
+    scored["paid_up_capital_score"] = scored["paid_up_capital"].map(
+        lambda value: 0.0 if value <= 0 or max_log <= 0 else min(10.0, (math.log(max(value, 1.0)) / max_log) * 10)
+    )
+
+    scored["sector_static_score"] = scored["sector"].map(lambda sector: SECTOR_TIER_SCORE.get(str(sector), 4.0)).astype(float)
+    scored["sector_live_score"] = scored["sector"].map(lambda sector: live_sector_scores.get(str(sector), math.nan))
+    scored["sector_score"] = scored.apply(
+        lambda row: row["sector_static_score"] if pd.isna(row["sector_live_score"]) else (row["sector_static_score"] * 0.55 + float(row["sector_live_score"]) * 0.45),
+        axis=1,
+    ).clip(0, 10)
+
+    city_results = scored.apply(lambda row: detect_city_tier(row.get("state", ""), row.get("address", "")), axis=1)
+    scored["city_tier"] = city_results.map(lambda item: item[0])
+    scored["geography_score"] = city_results.map(lambda item: item[1])
+
+    scarcity_key = (
+        scored["nic_code"].astype(str).str.lower().str.strip().replace("", "na")
+        + "::"
+        + scored["activity"].astype(str).str.lower().str.strip().replace("", "na")
+    )
+    frequency = scarcity_key.value_counts()
+
+    def scarcity_score(key: str) -> float:
+        count = int(frequency.get(key, 1))
+        if count <= 1:
+            return 10.0
+        if count <= 10:
+            return 10.0 / count
+        if count <= 100:
+            return 100.0 / count
+        return 1.0
+
+    scored["business_model_score"] = scarcity_key.map(scarcity_score).astype(float)
+    director_results = scored.apply(director_profile_score, axis=1)
+    scored["director_profile_score"] = director_results.map(lambda item: item[0])
+    scored["director_profile_status"] = director_results.map(lambda item: item[1])
+    scored["capital_ratio_score"] = scored.apply(
+        lambda row: capital_ratio_score(float(row["paid_up_capital"]), float(row["authorised_capital"])),
+        axis=1,
+    )
+    scored["capital_utilization_pct"] = scored.apply(
+        lambda row: 0.0 if float(row["authorised_capital"]) <= 0 else min(100.0, float(row["paid_up_capital"]) / float(row["authorised_capital"]) * 100),
+        axis=1,
+    )
+
+    total_weight = sum(1.0 for f in FACTORS if float(W.get(f.key, 1.0)) > 0)
+    weighted_total = pd.Series(0.0, index=scored.index)
+    for factor in FACTORS:
+        weight = 1.0 if float(W.get(factor.key, 1.0)) > 0 else 0.0
+        weighted_total += scored[f"{factor.key}_score"].fillna(0.0) * weight
+
+    scored["score"] = 0.0 if total_weight <= 0 else ((weighted_total / total_weight) * 10).clip(0, 100)
+    scored.loc[~eligible, "score"] = 0.0
+    scored["eligibility"] = scored["rejection_reason"].where(~eligible, "Eligible")
+    return scored.sort_values(["score","paid_up_capital"],ascending=[False,False]).reset_index(drop=True)
 
 
 # ─── CLAUDE AI ───────────────────────────────────────────────
@@ -976,6 +1218,120 @@ def call_claude(prompt: str, max_tokens: int=4000) -> str:
         return f"Request failed: {e}"
 
 
+# Scout Smart uses Groq for analysis and Tavily for sourced web research.
+def get_key() -> str:
+    load_env_file()
+    return os.getenv("GROQ_API_KEY","")
+
+def get_tavily_key() -> str:
+    load_env_file()
+    return os.getenv("TAVILY_API_KEY","")
+
+def ai_ok() -> bool:
+    return bool(get_key())
+
+def research_ok() -> bool:
+    return bool(get_key() and get_tavily_key())
+
+def tavily_search(query: str, max_results: int = 6) -> list[dict[str, str]]:
+    key = get_tavily_key()
+    if not key:
+        return []
+    try:
+        session = requests.Session()
+        session.trust_env = False
+        res = session.post(
+            TAVILY_URL,
+            json={
+                "api_key": key,
+                "query": query,
+                "search_depth": "advanced",
+                "include_answer": False,
+                "include_raw_content": False,
+                "max_results": max_results,
+            },
+            timeout=45,
+        )
+        res.raise_for_status()
+        return res.json().get("results", [])
+    except requests.RequestException as exc:
+        st.session_state.last_research_error = f"Live research unavailable: {exc}"
+        return []
+
+def groq_chat(prompt: str, max_tokens: int = 4000, temperature: float = 0.2) -> str:
+    key = get_key()
+    if not key:
+        return "No AI API key found. Add it in the .env file."
+    model = st.session_state.get("groq_model", os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL)) or DEFAULT_GROQ_MODEL
+    session = requests.Session()
+    session.trust_env = False
+    res = session.post(
+        GROQ_URL,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json={
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "You are Scout Smart, a professional unlisted-company screening analyst. Use only provided search snippets and uploaded company data. Mark unavailable facts as NA and do not invent sources."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        },
+        timeout=180,
+    )
+    res.raise_for_status()
+    return res.json()["choices"][0]["message"]["content"]
+
+def research_context(query: str, max_results: int = 6) -> str:
+    results = tavily_search(query, max_results=max_results)
+    if not results:
+        return st.session_state.get("last_research_error", "NA")
+    lines = []
+    for idx, item in enumerate(results, start=1):
+        lines.append(f"{idx}. {item.get('title', 'Untitled')}")
+        lines.append(f"   URL: {item.get('url', 'NA')}")
+        content = item.get("content") or item.get("snippet") or ""
+        if content:
+            lines.append(f"   Note: {content[:500]}")
+    return "\n".join(lines)
+
+def deep_scan_sector_scores(df: pd.DataFrame) -> dict[str, float]:
+    sectors = [s for s in sorted(df["sector"].dropna().unique()) if str(s).strip()]
+    scores: dict[str, float] = dict(st.session_state.get("sector_deep_scores", {}))
+    for sector in sectors[:12]:
+        if sector in scores:
+            continue
+        context = research_context(
+            f"India {sector} sector growth outlook thematic report sell side bank government policy PLI CAGR",
+            max_results=5,
+        )
+        prompt = f"""Score the sector below for Indian unlisted-company origination.
+
+SECTOR: {sector}
+PUBLIC RESEARCH SNIPPETS:
+{context}
+
+Return strict JSON only:
+{{"score": number from 0 to 10, "reason": "one sentence with cited source names when available"}}
+"""
+        try:
+            raw = groq_chat(prompt, max_tokens=500, temperature=0.0)
+            match = re.search(r"\{.*\}", raw, re.S)
+            data = json.loads(match.group(0) if match else raw)
+            scores[sector] = max(0.0, min(10.0, float(data.get("score", 0))))
+        except Exception:
+            scores[sector] = SECTOR_TIER_SCORE.get(sector, 4.0)
+    st.session_state.sector_deep_scores = scores
+    return scores
+
+def call_claude(prompt: str, max_tokens: int=4000) -> str:
+    try:
+        web = research_context(prompt[:500], max_results=8) if get_tavily_key() else "NA"
+        return groq_chat(f"{prompt}\n\nLIVE WEB CONTEXT FROM TAVILY\n{web}", max_tokens=max_tokens)
+    except Exception as e:
+        return f"Request failed: {e}"
+
+
 # ─── DOCUMENT EXPORT ────────────────────────────────────────
 def make_doc(title: str, body: str) -> tuple[bytes,str,str]:
     if Document is not None:
@@ -999,12 +1355,13 @@ def make_doc(title: str, body: str) -> tuple[bytes,str,str]:
 # ─── STATE ───────────────────────────────────────────────────
 def init():
     defs = {
-        "W":       {f.key:f.weight for f in FACTORS},
+        "W":       {f.key:1.0 for f in FACTORS},
         "df":      pd.DataFrame(),
         "sel":     None,
         "cache":   {},
         "notes":   "",
-        "api_key": os.getenv("ANTHROPIC_API_KEY",""),
+        "groq_model": os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL),
+        "sector_deep_scores": {},
     }
     for k,v in defs.items():
         if k not in st.session_state:
@@ -1023,8 +1380,8 @@ def get_sel(df: pd.DataFrame) -> pd.Series | None:
 # ─── SIDEBAR ─────────────────────────────────────────────────
 def render_sidebar(base: pd.DataFrame) -> pd.DataFrame:
     with st.sidebar:
-        st.markdown("## 🌿 GreenFlow")
-        st.caption("Company Intelligence Platform")
+        st.markdown("## Scout Smart")
+        st.caption("Company Screening Controls")
         st.divider()
 
         st.markdown("### Upload MCA File")
@@ -1045,33 +1402,33 @@ def render_sidebar(base: pd.DataFrame) -> pd.DataFrame:
             base = get_df().copy()
 
         st.divider()
-        st.markdown("### Claude AI Key")
-        k = st.text_input("Key", value=st.session_state.get("api_key",""),
-                          type="password", label_visibility="collapsed",
-                          placeholder="sk-ant-…")
-        if k: st.session_state.api_key = k
-        if ai_ok(): st.success("Claude AI active ✓")
-        else:        st.warning("Add API key to enable AI analysis")
-
-        st.divider()
-        st.markdown("### Scoring Weights")
-        st.caption("0 = exclude · 10 = max  |  Default 6.66 × 15 = 100")
+        st.markdown("### Scoring Factors")
+        st.caption("Included factors are scored with equal weight.")
         W: dict[str,float] = {}
         for f in FACTORS:
-            W[f.key] = float(st.number_input(
-                f.label, min_value=0.0, max_value=10.0,
-                value=float(st.session_state.W.get(f.key, f.weight)),
-                step=0.01, format="%.2f", help=f.desc, key=f"w_{f.key}",
-            ))
+            current_value = float(st.session_state.W.get(f.key, 1.0))
+            included = st.toggle(f.label, value=current_value > 0, help=f.desc, key=f"include_{f.key}")
+            W[f.key] = 1.0 if included else 0.0
         st.session_state.W = W
-        total_w = round(sum(W.values()), 2)
-        st.caption(f"Total weight: **{total_w:.2f}** / 100")
+        included_count = sum(1 for value in W.values() if value > 0)
+        st.caption(f"Included factors: **{included_count} / {len(FACTORS)}**")
+        deep_scan = st.checkbox("Deep Scan sector reports", value=False, help="Uses live sector research once per sector, then caches results.")
         st.markdown(" ")
         if st.button("▶ Run Scoring", use_container_width=True):
             b = get_df()
-            if b.empty: st.warning("Upload a file first.")
+            if b.empty:
+                st.warning("Upload a file first.")
             else:
-                scored = apply_scoring(b, W)
+                live_scores = {}
+                if deep_scan:
+                    if research_ok():
+                        with st.spinner("Searching sector reports and scoring sector momentum..."):
+                            live_scores = deep_scan_sector_scores(b)
+                        if st.session_state.get("last_research_error"):
+                            st.warning("Live research was unavailable. Static sector tiers were used where needed.")
+                    else:
+                        st.warning("Add API keys in .env to run Deep Scan. Static sector tiers used.")
+                scored = apply_scoring(b, W, live_scores)
                 st.session_state.df = scored
                 st.success(f"Scored {len(scored):,} companies")
                 base = scored.copy()
@@ -1120,10 +1477,28 @@ def show_company(row: pd.Series) -> None:
         st.markdown("**Key Facts**")
         st.write(f"- **Paid-up:** {inr(float(row['paid_up_capital']))}")
         st.write(f"- **Auth Capital:** {inr(float(row['authorised_capital']))}")
+        if "capital_utilization_pct" in row: st.write(f"- **Capital Utilization:** {float(row['capital_utilization_pct']):.1f}%")
+        if row.get("nic_code"): st.write(f"- **NIC:** {row.get('nic_code')}")
+        if row.get("filing_status"): st.write(f"- **Filing:** {row.get('filing_status')}")
         st.write(f"- **Status:** {row['status']}")
         st.write(f"- **Inc. Year:** {row.get('inc_year','—')}")
         if row.get("email"): st.write(f"- **Email:** {row['email']}")
         if row.get("address"): st.write(f"- **Address:** {str(row['address'])[:80]}")
+
+    factor_cols = [
+        ("Capital", "paid_up_capital_score"),
+        ("Sector", "sector_score"),
+        ("Geo", "geography_score"),
+        ("Scarcity", "business_model_score"),
+        ("Directors", "director_profile_score"),
+        ("Ratio", "capital_ratio_score"),
+        ("Filing", "filing_compliance_score"),
+    ]
+    with st.expander("Scoring Breakdown"):
+        factor_view = pd.DataFrame(
+            [{"Factor": label, "Score / 10": round(float(row.get(key, 0) or 0), 1)} for label, key in factor_cols]
+        )
+        st.dataframe(factor_view, use_container_width=True, hide_index=True)
 
     lk = links(row["company_name"], row["cin"])
     with st.expander("Research Links"):
@@ -1145,6 +1520,13 @@ def tab_dashboard(df: pd.DataFrame) -> None:
         st.info("Upload an MCA Excel or CSV file via the sidebar, then click **Run Scoring**.")
         return
 
+    top = df.iloc[0]
+    t1, t2 = st.columns([1.2, 2.8])
+    with t1:
+        st.metric("Top Company", top["company_name"], f'{int(top["score"])} / 100')
+    with t2:
+        st.caption(f'{top["cin"]} | {top["sector"]} | {top["state"]} | {inr(float(top["paid_up_capital"]))}')
+
     chosen = st.selectbox(
         "Select a company:",
         options=df["cin"].tolist(),
@@ -1157,8 +1539,8 @@ def tab_dashboard(df: pd.DataFrame) -> None:
         show_company(row)
 
     st.divider()
-    st.markdown("### Ranked Company List")
-    view = df.head(20)[["company_name","cin","sector","state","status","paid_up_capital","score"]].copy()
+    st.markdown("### Top 10 Companies")
+    view = df.head(10)[["company_name","cin","sector","state","status","paid_up_capital","score","eligibility"]].copy()
     view["paid_up_capital"] = view["paid_up_capital"].map(inr)
     view["rating"] = view["score"].map(score_label)
     st.dataframe(view, use_container_width=True, hide_index=True)
@@ -1512,8 +1894,8 @@ def main() -> None:
         filtered = apply_scoring(filtered, W)
 
     # Header
-    st.markdown("# 🌿 GreenFlow Ventures")
-    st.caption("Company Level Intelligence Platform  ·  Powered by Claude AI + Live Web Research")
+    st.markdown("# Scout Smart")
+    st.caption("Unlisted-company screening dashboard")
     st.divider()
 
     # Full scored df for analysis tabs

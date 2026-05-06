@@ -3,3 +3,8 @@ pandas
 openpyxl
 xlrd
 requests
+plotly
+beautifulsoup4
+python-docx
+pdfplumber
+pypdf

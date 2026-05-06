@@ -1,0 +1,6 @@
+google-genai>=1.0.0
+openai>=1.107.0
+python-dotenv>=1.0.1
+requests>=2.32.3
+schedule>=1.2.2
+selenium>=4.28.1

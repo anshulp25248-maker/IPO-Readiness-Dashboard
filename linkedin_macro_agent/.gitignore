@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+logs/
+data/generated_posts/
+data/run_history.jsonl
+data/state.json
