@@ -78,13 +78,13 @@ export function Drawer() {
         <div className="mt-6 rounded-2xl border border-white/45 bg-white/50 p-4 shadow-lg backdrop-blur-xl">
           <p className="text-sm font-black text-slate-950">Upload Company File</p>
           <p className="mt-1 text-xs font-semibold leading-5 text-slate-800/75">
-            Upload MCA Excel, CSV, PDF, JSON, HTML, TSV, or other pandas-readable company files.
+            Upload MCA Excel, CSV, TSV, or JSON company files.
           </p>
           <label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-indigo-950">
             Upload File
             <input
               type="file"
-              accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm,.ods,.json,.html,.htm,.pdf,.parquet,.feather,.pkl,.pickle"
+              accept=".csv,.tsv,.xlsx,.xls,.xlsm,.ods,.json"
               className="hidden"
               onChange={(event) => {
                 const file = event.target.files?.[0];
