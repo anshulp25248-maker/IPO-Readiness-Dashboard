@@ -82,11 +82,7 @@ async function callGemini(options: GenerateOptions): Promise<AiResult> {
   const apiKey = envValue("GEMINI_API_KEY") || envValue("GOOGLE_API_KEY");
   if (!apiKey) throw new Error("Gemini key not configured");
 
-  const model = taskModel(
-    "GEMINI_MODEL",
-    options.task === "cdr" ? "gemini-2.5-flash" : "gemini-2.5-flash-lite",
-    options.task,
-  );
+  const model = taskModel("GEMINI_MODEL", "gemini-2.5-flash", options.task);
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
