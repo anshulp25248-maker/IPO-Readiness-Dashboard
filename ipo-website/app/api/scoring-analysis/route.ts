@@ -60,13 +60,13 @@ function fallbackInsights(companies: Company[], scores?: Record<string, number>,
       companyName: company.name,
       aiScore: Math.max(0, Math.min(100, Math.round(score))),
       recommendation: score >= 85 ? "Watchlist" : score >= 70 ? "Data Insufficient" : "Reject",
-      rationale: `${reason}. Showing a conservative fallback view from uploaded factor scores only; run again after the Groq quota resets for live public-source AI analysis.`,
+      rationale: `${reason}. Showing a conservative fallback view from uploaded factor scores only; run again after the active AI provider quota resets for live public-source analysis.`,
       strengths: [
         `Deterministic Scout Score is ${Math.round(score)}/100.`,
         `Sector factor is ${company.factors.sector.toFixed(1)}/10 and business-model factor is ${company.factors.businessModel.toFixed(1)}/10.`,
       ],
       redFlags,
-      missingData: ["Live Groq qualitative analysis was not returned."],
+      missingData: ["Live AI qualitative analysis was not returned."],
     };
   });
 }
