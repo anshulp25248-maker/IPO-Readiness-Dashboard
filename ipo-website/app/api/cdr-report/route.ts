@@ -1,7 +1,6 @@
-import fs from "node:fs";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { Company } from "../../_data/companies";
+import { envValue, generateAiText } from "../_lib/ai";
 
 export const runtime = "nodejs";
 
@@ -19,33 +18,7 @@ type ReportType =
   | "company-analysis"
   | "comprehensive-cdr";
 
-const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
 const tavilyUrl = "https://api.tavily.com/search";
-
-function readEnvFile(filePath: string) {
-  if (!fs.existsSync(filePath)) return {};
-  return fs.readFileSync(filePath, "utf8").split(/\r?\n/).reduce<Record<string, string>>((values, line) => {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) return values;
-    const equalsAt = trimmed.indexOf("=");
-    if (equalsAt === -1) return values;
-    values[trimmed.slice(0, equalsAt).trim()] = trimmed.slice(equalsAt + 1).trim().replace(/^["']|["']$/g, "");
-    return values;
-  }, {});
-}
-
-function envValue(key: string) {
-  if (process.env[key]) return process.env[key];
-  for (const candidate of [
-    path.join(process.cwd(), ".env.local"),
-    path.join(process.cwd(), ".env"),
-    path.join(process.cwd(), "..", ".env"),
-  ]) {
-    const value = readEnvFile(candidate)[key];
-    if (value) return value;
-  }
-  return "";
-}
 
 async function tavilySearch(query: string) {
   const apiKey = envValue("TAVILY_API_KEY");
@@ -181,11 +154,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No company supplied." }, { status: 400 });
     }
 
-    const groqKey = envValue("GROQ_API_KEY");
-    if (!groqKey) {
-      return NextResponse.json({ error: "GROQ_API_KEY is missing in .env." }, { status: 500 });
-    }
-
     const selectedReportType: ReportType = reportType || "company-analysis";
     const results = await tavilySearchMany(searchQueries(company, selectedReportType));
     const prompt = `You are a senior investment analyst specializing in unlisted/private companies in India. Your task is to research the company named ${company.name} (CIN if known: ${company.cin}) and produce a thorough, data-driven Investment Research Report. You must NOT generate, hallucinate, or assume any data. Every single data point must be sourced from publicly available platforms listed below or from the uploaded MCA/feed-parser data. If data is unavailable, explicitly state "Data Not Available" for that field.
@@ -267,38 +235,18 @@ FINAL INSTRUCTIONS:
 - Assess business-model uniqueness using uploaded NIC/activity data plus live public evidence; if public evidence is thin, say so and keep the conclusion conservative.
 - The final report should be detailed enough that a reader can make an informed decision on whether to invest, lend to, or partner with this company without needing follow-up questions.`;
 
-    const response = await fetch(groqUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${groqKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: envValue("GROQ_MODEL") || "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "system",
-            content: "You are Scout Smarter, an investment banking analyst preparing a first-pass company diligence report. Be detailed, source-aware, skeptical, and never hallucinate.",
-          },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.12,
-        max_tokens: 8000,
-      }),
-      cache: "no-store",
+    const ai = await generateAiText({
+      system: "You are Scout Smarter, an investment banking analyst preparing a first-pass company diligence report. Be detailed, source-aware, skeptical, and never hallucinate.",
+      prompt,
+      temperature: 0.12,
+      maxTokens: selectedReportType === "comprehensive-cdr" ? 4500 : 3200,
     });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        throw new Error("AI rate limit reached. Please retry after a short while.");
-      }
-      throw new Error(`AI CDR generation failed with ${response.status}`);
-    }
-    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-
     return NextResponse.json({
-      report: data.choices?.[0]?.message?.content || "No CDR report returned.",
+      report: ai.text || "No CDR report returned.",
       sources: results.map((item) => ({ title: item.title, url: item.url })),
+      provider: ai.provider,
+      model: ai.model,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {

@@ -1,35 +1,12 @@
-import fs from "node:fs";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { Company } from "../../_data/companies";
+import { envValue, generateAiText } from "../_lib/ai";
 
 export const runtime = "nodejs";
 
 type SearchResult = { title?: string; url?: string; content?: string };
 
-const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
 const tavilyUrl = "https://api.tavily.com/search";
-
-function readEnvFile(filePath: string) {
-  if (!fs.existsSync(filePath)) return {};
-  return fs.readFileSync(filePath, "utf8").split(/\r?\n/).reduce<Record<string, string>>((values, line) => {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) return values;
-    const equalsAt = trimmed.indexOf("=");
-    if (equalsAt === -1) return values;
-    values[trimmed.slice(0, equalsAt).trim()] = trimmed.slice(equalsAt + 1).trim().replace(/^["']|["']$/g, "");
-    return values;
-  }, {});
-}
-
-function envValue(key: string) {
-  if (process.env[key]) return process.env[key];
-  for (const candidate of [path.join(process.cwd(), ".env.local"), path.join(process.cwd(), ".env"), path.join(process.cwd(), "..", ".env")]) {
-    const value = readEnvFile(candidate)[key];
-    if (value) return value;
-  }
-  return "";
-}
 
 async function tavilySearch(query: string) {
   const apiKey = envValue("TAVILY_API_KEY");
@@ -55,8 +32,6 @@ export async function POST(request: Request) {
   try {
     const { company, peers } = (await request.json()) as { company?: Company; peers?: Company[] };
     if (!company) return NextResponse.json({ error: "No company supplied." }, { status: 400 });
-    const groqKey = envValue("GROQ_API_KEY");
-    if (!groqKey) return NextResponse.json({ error: "GROQ_API_KEY is missing in .env." }, { status: 500 });
 
     const similarPeers = (peers || [])
       .filter((peer) => peer.id !== company.id)
@@ -86,27 +61,19 @@ Return markdown with:
 7. Competitor score implication for investment screening
 8. Suggested diligence questions`;
 
-    const response = await fetch(groqUrl, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${groqKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: envValue("GROQ_MODEL") || "llama-3.3-70b-versatile",
-        messages: [
-          { role: "system", content: "You are a competition and business-model diligence analyst for private-company investing." },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.12,
-        max_tokens: 5000,
-      }),
-      cache: "no-store",
+    const ai = await generateAiText({
+      system: "You are a competition and business-model diligence analyst for private-company investing.",
+      prompt,
+      temperature: 0.12,
+      maxTokens: 3000,
     });
 
-    if (!response.ok) throw new Error(`Groq competitor research failed with ${response.status}`);
-    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
     return NextResponse.json({
-      report: data.choices?.[0]?.message?.content || "No competitor research returned.",
+      report: ai.text || "No competitor research returned.",
       sources: results.map((item) => ({ title: item.title, url: item.url })),
       peerCount: similarPeers.length,
+      provider: ai.provider,
+      model: ai.model,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Competitor research failed." }, { status: 500 });

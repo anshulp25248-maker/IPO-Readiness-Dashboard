@@ -1,35 +1,12 @@
-import fs from "node:fs";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { Company } from "../../_data/companies";
+import { envValue, generateAiText } from "../_lib/ai";
 
 export const runtime = "nodejs";
 
 type SearchResult = { title?: string; url?: string; content?: string };
 
-const groqUrl = "https://api.groq.com/openai/v1/chat/completions";
 const tavilyUrl = "https://api.tavily.com/search";
-
-function readEnvFile(filePath: string) {
-  if (!fs.existsSync(filePath)) return {};
-  return fs.readFileSync(filePath, "utf8").split(/\r?\n/).reduce<Record<string, string>>((values, line) => {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) return values;
-    const equalsAt = trimmed.indexOf("=");
-    if (equalsAt === -1) return values;
-    values[trimmed.slice(0, equalsAt).trim()] = trimmed.slice(equalsAt + 1).trim().replace(/^["']|["']$/g, "");
-    return values;
-  }, {});
-}
-
-function envValue(key: string) {
-  if (process.env[key]) return process.env[key];
-  for (const candidate of [path.join(process.cwd(), ".env.local"), path.join(process.cwd(), ".env"), path.join(process.cwd(), "..", ".env")]) {
-    const value = readEnvFile(candidate)[key];
-    if (value) return value;
-  }
-  return "";
-}
 
 async function tavilySearch(query: string) {
   const apiKey = envValue("TAVILY_API_KEY");
@@ -94,37 +71,15 @@ function fallbackInsights(companies: Company[], scores?: Record<string, number>,
   });
 }
 
-async function groqJson(prompt: string, apiKey: string) {
-  const preferredModel = envValue("GROQ_MODEL") || "llama-3.1-8b-instant";
-  const models = preferredModel === "llama-3.1-8b-instant" ? [preferredModel] : [preferredModel, "llama-3.1-8b-instant"];
-
-  let lastError = "";
-  for (const model of models) {
-    const response = await fetch(groqUrl, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: "Return only valid compact JSON. Never hallucinate." },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.05,
-        max_tokens: 1800,
-      }),
-      cache: "no-store",
-    });
-
-    if (response.ok) {
-      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-      return data.choices?.[0]?.message?.content || "{}";
-    }
-
-    lastError = `Groq scoring analysis failed with ${response.status}`;
-    if (response.status !== 429) break;
-  }
-
-  throw new Error(lastError);
+async function aiJson(prompt: string) {
+  const result = await generateAiText({
+    system: "Return only valid compact JSON. Never hallucinate.",
+    prompt,
+    temperature: 0.05,
+    maxTokens: 1800,
+    responseJson: true,
+  });
+  return result.text || "{}";
 }
 
 function scoringTruth(company: Company, score: number | undefined) {
@@ -153,9 +108,6 @@ export async function POST(request: Request) {
     };
     const selectedCompanies = (companies || []).slice(0, 3);
     if (!selectedCompanies.length) return NextResponse.json({ error: "No companies supplied." }, { status: 400 });
-
-    const groqKey = envValue("GROQ_API_KEY");
-    if (!groqKey) return NextResponse.json({ error: "GROQ_API_KEY is missing in .env." }, { status: 500 });
 
     const query = `${selectedCompanies.slice(0, 5).map((company) => `${company.name} ${company.cin}`).join(" OR ")} MCA Zauba Tofler sector directors India`;
     const results = await tavilySearch(query);
@@ -191,7 +143,7 @@ AI score should reflect public-data confidence, sector attractiveness, business-
 
     let parsed: ReturnType<typeof parseJson>;
     try {
-      parsed = parseJson(await groqJson(prompt, groqKey));
+      parsed = parseJson(await aiJson(prompt));
     } catch (error) {
       const message = error instanceof Error ? error.message : "AI provider unavailable";
       return NextResponse.json({
