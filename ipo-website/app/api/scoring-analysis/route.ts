@@ -5,12 +5,22 @@ import { envValue, generateAiText } from "../_lib/ai";
 export const runtime = "nodejs";
 
 type SearchResult = { title?: string; url?: string; content?: string };
+type ParsedInsight = {
+  companyId?: string;
+  companyName?: string;
+  aiScore?: number;
+  recommendation?: string;
+  rationale?: string;
+  strengths?: string[];
+  redFlags?: string[];
+  missingData?: string[];
+};
 
 const tavilyUrl = "https://api.tavily.com/search";
 
 async function tavilySearch(query: string) {
   const apiKey = envValue("TAVILY_API_KEY");
-  if (!apiKey) return [];
+  if (!apiKey) return { results: [], status: "Tavily is not configured; add TAVILY_API_KEY for public-source enrichment." };
   const response = await fetch(tavilyUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -19,7 +29,11 @@ async function tavilySearch(query: string) {
   });
   if (!response.ok) throw new Error(`Tavily scoring search failed with ${response.status}`);
   const data = (await response.json()) as { results?: SearchResult[] };
-  return data.results ?? [];
+  const results = data.results ?? [];
+  return {
+    results,
+    status: results.length ? `Tavily returned ${results.length} public-source snippets.` : "Tavily returned no public-source snippets.",
+  };
 }
 
 function sourceContext(results: SearchResult[]) {
@@ -29,21 +43,96 @@ function sourceContext(results: SearchResult[]) {
     .join("\n\n") || "No public feed results returned.";
 }
 
+function extractJsonObject(content: string) {
+  const cleaned = content
+    .replace(/```json/gi, "```")
+    .replace(/```/g, "")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .trim();
+  const start = cleaned.indexOf("{");
+  if (start === -1) return cleaned;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < cleaned.length; index += 1) {
+    const char = cleaned[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (char === "{") depth += 1;
+    if (char === "}") depth -= 1;
+    if (depth === 0) return cleaned.slice(start, index + 1);
+  }
+  return cleaned.slice(start);
+}
+
+function repairJson(content: string) {
+  return extractJsonObject(content)
+    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/([}\]"])\s*;\s*([{\["])/g, "$1,$2")
+    .replace(/"\s*\n\s*"/g, '",\n"')
+    .replace(/]\s*\n\s*"/g, '],\n"')
+    .replace(/}\s*\n\s*"/g, '},\n"');
+}
+
 function parseJson(content: string) {
-  const match = content.match(/\{[\s\S]*\}/);
-  return JSON.parse(match ? match[0] : content) as {
+  const candidates = [extractJsonObject(content), repairJson(content)];
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as {
     report?: string;
-    insights?: Array<{
-      companyId?: string;
-      companyName?: string;
-      aiScore?: number;
-      recommendation?: string;
-      rationale?: string;
-      strengths?: string[];
-      redFlags?: string[];
-      missingData?: string[];
-    }>;
-  };
+        insights?: ParsedInsight[];
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("AI returned invalid JSON");
+}
+
+function clampScore(value: unknown, fallback: number) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+function normalizeInsights(companies: Company[], scores: Record<string, number> | undefined, insights: ParsedInsight[]) {
+  return companies.map((company, index) => {
+    const deterministicScore = scores?.[company.id] ?? 0;
+    const insight =
+      insights.find((item) => item.companyId === company.id) ||
+      insights.find((item) => item.companyName?.toLowerCase().trim() === company.name.toLowerCase().trim()) ||
+      insights[index] ||
+      {};
+
+    return {
+      companyId: company.id,
+      companyName: insight.companyName || company.name,
+      aiScore: clampScore(insight.aiScore, deterministicScore),
+      recommendation:
+        insight.recommendation ||
+        (deterministicScore >= 85 ? "Watchlist" : deterministicScore >= 70 ? "Data Insufficient" : "Reject"),
+      rationale:
+        insight.rationale ||
+        "AI returned an incomplete structured insight, so this view is anchored to the uploaded deterministic score and public-source availability.",
+      strengths: Array.isArray(insight.strengths) ? insight.strengths.map(String).slice(0, 4) : [],
+      redFlags: Array.isArray(insight.redFlags) ? insight.redFlags.map(String).slice(0, 4) : [],
+      missingData: Array.isArray(insight.missingData) ? insight.missingData.map(String).slice(0, 5) : [],
+    };
+  });
 }
 
 function fallbackInsights(companies: Company[], scores?: Record<string, number>, reason = "AI provider unavailable") {
@@ -71,6 +160,32 @@ function fallbackInsights(companies: Company[], scores?: Record<string, number>,
   });
 }
 
+function narrativeInsights(companies: Company[], scores: Record<string, number> | undefined, aiText: string, sourceStatus: string) {
+  const narrative = aiText.replace(/\s+/g, " ").slice(0, 420);
+  return companies.map((company) => {
+    const score = scores?.[company.id] ?? 0;
+    return {
+      companyId: company.id,
+      companyName: company.name,
+      aiScore: Math.max(0, Math.min(100, Math.round(score))),
+      recommendation: score >= 85 ? "Watchlist" : score >= 70 ? "Data Insufficient" : "Reject",
+      rationale: narrative
+        ? `${narrative} This narrative was returned by the AI provider but was not valid JSON, so the score remains anchored to parsed data.`
+        : `AI returned a non-structured response. ${sourceStatus}`,
+      strengths: [
+        `Parsed score is ${Math.round(score)}/100.`,
+        `Business-model score is ${company.factors.businessModel.toFixed(1)}/10.`,
+      ],
+      redFlags: [
+        company.lastFiling === "NA" || company.lastFiling === "Data Not Available"
+          ? "Filing date is not available in uploaded data."
+          : "",
+      ].filter(Boolean),
+      missingData: ["Structured AI JSON was not returned."],
+    };
+  });
+}
+
 async function aiJson(prompt: string) {
   const result = await generateAiText({
     task: "scoring",
@@ -80,7 +195,7 @@ async function aiJson(prompt: string) {
     maxTokens: 1800,
     responseJson: true,
   });
-  return result.text || "{}";
+  return result;
 }
 
 function scoringTruth(company: Company, score: number | undefined) {
@@ -111,7 +226,15 @@ export async function POST(request: Request) {
     if (!selectedCompanies.length) return NextResponse.json({ error: "No companies supplied." }, { status: 400 });
 
     const query = `${selectedCompanies.slice(0, 5).map((company) => `${company.name} ${company.cin}`).join(" OR ")} MCA Zauba Tofler sector directors India`;
-    const results = await tavilySearch(query);
+    let results: SearchResult[] = [];
+    let sourceStatus = "";
+    try {
+      const tavily = await tavilySearch(query);
+      results = tavily.results;
+      sourceStatus = tavily.status;
+    } catch (error) {
+      sourceStatus = error instanceof Error ? error.message : "Tavily public-source enrichment failed.";
+    }
 
     const prompt = `You are the AI scoring layer for Scout Smarter. Analyze uploaded Indian company screening data plus public feed snippets. Keep every statement source-aware and conservative.
 
@@ -121,6 +244,8 @@ COMPANY DATA
 ${JSON.stringify(selectedCompanies.map((company) => scoringTruth(company, scores?.[company.id])), null, 2)}
 
 PUBLIC FEED
+${sourceStatus}
+
 ${sourceContext(results)}
 
 Return strict JSON only:
@@ -144,21 +269,36 @@ AI score should reflect public-data confidence, sector attractiveness, business-
 
     let parsed: ReturnType<typeof parseJson>;
     try {
-      parsed = parseJson(await aiJson(prompt));
+      const ai = await aiJson(prompt);
+      try {
+        parsed = parseJson(ai.text);
+      } catch {
+        return NextResponse.json({
+          report: ai.text || "AI scoring layer returned narrative analysis.",
+          insights: narrativeInsights(selectedCompanies, scores, ai.text, sourceStatus),
+          sources: results.map((item) => ({ title: item.title, url: item.url })),
+          sourceStatus,
+          provider: ai.provider,
+          model: ai.model,
+          fallback: true,
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "AI provider unavailable";
       return NextResponse.json({
         report: `${message}. Conservative fallback generated from uploaded scoring data.`,
         insights: fallbackInsights(selectedCompanies, scores, message),
         sources: results.map((item) => ({ title: item.title, url: item.url })),
+        sourceStatus,
         fallback: true,
       });
     }
 
     return NextResponse.json({
       report: parsed.report || "AI scoring layer completed.",
-      insights: parsed.insights || [],
+      insights: normalizeInsights(selectedCompanies, scores, parsed.insights || []),
       sources: results.map((item) => ({ title: item.title, url: item.url })),
+      sourceStatus,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "AI scoring layer failed." }, { status: 500 });
