@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Company } from "../../_data/companies";
 import { envValue, generateAiText } from "../_lib/ai";
+import { scoringJsonReportFormat } from "../_lib/report-format";
 
 export const runtime = "nodejs";
 
@@ -265,7 +266,9 @@ Return strict JSON only:
   ]
 }
 
-AI score should reflect public-data confidence, sector attractiveness, business-model uniqueness, management/compliance evidence, red flags, and missing-data penalties.`;
+AI score should reflect public-data confidence, sector attractiveness, business-model uniqueness, management/compliance evidence, red flags, and missing-data penalties.
+
+${scoringJsonReportFormat}`;
 
     let parsed: ReturnType<typeof parseJson>;
     try {

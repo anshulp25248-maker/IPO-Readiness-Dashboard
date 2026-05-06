@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Company } from "../../_data/companies";
 import { envValue, generateAiText } from "../_lib/ai";
+import { investmentBankingReportFormat } from "../_lib/report-format";
 
 export const runtime = "nodejs";
 
@@ -44,16 +45,9 @@ ${JSON.stringify(company || { cin }, null, 2)}
 PUBLIC FEED
 ${sourceContext(results)}
 
-Return a detailed markdown report with:
-1. Director / promoter names found
-2. DIN or identifiers if found
-3. Current and past directorship signals
-4. Education / professional qualification signals
-5. Founder/operator credibility
-6. Red flags and negative news
-7. Verification gaps
-8. Director score recommendation using rules: 3+ directorships = 10, 2 = 7, 1 = 4, professional degree only = 5, professional degree + multiple directorships = 10, insufficient data = Unverified.
-9. Sources used`;
+${investmentBankingReportFormat}
+
+Write the director report with these major section headings and detailed paragraphs under each: Director Identity and Source Confidence; DIN and Directorship Signals; Education and Operating Track Record; Promoter Credibility; Governance and Related-Party Concerns; Red Flags and Negative News; Verification Gaps; Director Score Recommendation; Investment View.`;
 
     const ai = await generateAiText({
       task: "director",

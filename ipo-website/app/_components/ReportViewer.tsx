@@ -9,6 +9,37 @@ function cleanLine(line: string) {
     .trim();
 }
 
+function mergeParagraphLines(lines: string[]) {
+  const merged: string[] = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const cleaned = cleanLine(line);
+    const previous = merged[merged.length - 1];
+    const startsNew =
+      /^#{1,3}\s*/.test(line) ||
+      /^(section\s+)?\d+\s*[.-]/i.test(line) ||
+      isSubheading(line) ||
+      /^RED FLAG:/i.test(cleaned) ||
+      /^POSITIVE:/i.test(cleaned);
+
+    if (
+      previous &&
+      !startsNew &&
+      previous.length < 360 &&
+      !/[.!?)]$/.test(previous) &&
+      !/:\s*$/.test(previous)
+    ) {
+      merged[merged.length - 1] = `${previous} ${cleaned}`;
+    } else {
+      merged.push(line);
+    }
+  }
+
+  return merged;
+}
+
 function isSubheading(line: string) {
   const cleaned = cleanLine(line);
   return (
@@ -30,7 +61,7 @@ export function ReportViewer({ report }: { report: string }) {
   return (
     <div className="grid gap-6">
       {sections.map((section, index) => {
-        const lines = section.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+        const lines = mergeParagraphLines(section.split(/\r?\n/));
         const title = cleanLine(lines[0] || `Section ${index + 1}`);
         const body = lines.slice(1);
 
@@ -70,7 +101,7 @@ export function ReportViewer({ report }: { report: string }) {
                 return (
                   <p
                     key={`${cleaned}-${lineIndex}`}
-                    className={`rounded-xl px-4 py-3 text-justify ${
+                    className={`rounded-xl px-4 py-3 text-justify leading-8 ${
                       isRedFlag
                         ? "border border-rose-200 bg-rose-50/85 font-semibold text-rose-950"
                         : isPositive

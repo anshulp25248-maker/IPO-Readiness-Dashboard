@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Company, FactorKey } from "../../_data/companies";
 import { envValue, generateAiText } from "../_lib/ai";
+import { scoringJsonReportFormat } from "../_lib/report-format";
 
 export const runtime = "nodejs";
 
@@ -189,7 +190,9 @@ Return strict JSON only:
       "competitors": ["...", "..."]
     }
   ]
-}`;
+}
+
+${scoringJsonReportFormat}`;
 
   const result = await generateAiText({
     task: "company-search",

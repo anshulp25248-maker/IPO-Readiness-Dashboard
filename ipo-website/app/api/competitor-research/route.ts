@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Company } from "../../_data/companies";
 import { envValue, generateAiText } from "../_lib/ai";
+import { investmentBankingReportFormat } from "../_lib/report-format";
 
 export const runtime = "nodejs";
 
@@ -51,15 +52,9 @@ ${JSON.stringify(similarPeers, null, 2)}
 LIVE FEED
 ${sourceContext(results)}
 
-Return markdown with:
-1. Business model interpretation
-2. Same NIC/activity peers from uploaded list
-3. Public competitors from live feed
-4. Scarcity/saturation analysis
-5. Differentiation hypotheses
-6. Red flags and commoditization risk
-7. Competitor score implication for investment screening
-8. Suggested diligence questions`;
+${investmentBankingReportFormat}
+
+Write the competitor report with these major section headings and detailed paragraphs under each: Business Model Interpretation; Uploaded Peer Universe; Public Competitor Landscape; Scarcity and Saturation Analysis; Differentiation and Moat; Red Flags and Commoditization Risk; Score Implication; Diligence Questions and Investment View.`;
 
     const ai = await generateAiText({
       task: "competitor",

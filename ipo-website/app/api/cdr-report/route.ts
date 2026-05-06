@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Company } from "../../_data/companies";
 import { envValue, generateAiText } from "../_lib/ai";
+import { investmentBankingReportFormat } from "../_lib/report-format";
 
 export const runtime = "nodejs";
 
@@ -89,7 +90,7 @@ function companyTruth(company: Company, score: number | undefined) {
 }
 
 function reportInstructions(type: ReportType) {
-  const common = `Write in complete analyst paragraphs, not bullet points. Use clear section headings, but do not use numbered markdown lists. Every section must distinguish verified facts from inference. Red flags must begin with "RED FLAG:" and investment positives must begin with "POSITIVE:".`;
+  const common = `Write in complete analyst paragraphs, not bullet points. Use clear section headings, but do not use numbered markdown lists. Every section must distinguish verified facts from inference. Red flags must begin with "RED FLAG:" and investment positives must begin with "POSITIVE:". ${investmentBankingReportFormat}`;
 
   const instructions: Record<ReportType, string> = {
     "sector-analysis": `Create a detailed investment-banking sector report. Cover sector definition, market size, growth, policy stance, PLI or government incentives, regulatory bodies, listed benchmarks, funding appetite, margin pattern, cyclicality, demand pools, downside risks, and diligence questions. ${common}`,
@@ -186,6 +187,8 @@ ${selectedReportType}
 
 REPORT INSTRUCTIONS
 ${reportInstructions(selectedReportType)}
+
+${investmentBankingReportFormat}
 
 BASE REPORT STRUCTURE TO GENERATE:
 
