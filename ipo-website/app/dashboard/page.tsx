@@ -2,6 +2,7 @@
 
 import { AppShell } from "../_components/AppShell";
 import { FactorGrid, GlassPanel, ScoreBadge, CompanyTable } from "../_components/CompanyWidgets";
+import { ReportViewer } from "../_components/ReportViewer";
 import { useScout } from "../_components/ScoutProvider";
 
 export default function DashboardPage() {
@@ -120,6 +121,17 @@ export default function DashboardPage() {
       <div className="mt-5">
         <CompanyTable limit={5} />
       </div>
+
+      {aiScoreReport ? (
+        <GlassPanel className="mt-5">
+          <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">
+            First AI Layer Report
+          </p>
+          <div className="mt-5 max-h-[680px] overflow-y-auto rounded-2xl border border-white/35 bg-white/35 p-4 shadow-inner">
+            <ReportViewer report={aiScoreReport} />
+          </div>
+        </GlassPanel>
+      ) : null}
     </AppShell>
   );
 }
