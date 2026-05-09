@@ -7,7 +7,7 @@ import {
   normalizeWeights,
   scoreCompanyDeterministically,
 } from "../../_lib/scout-v2";
-import { envValue, generateAiText } from "../_lib/ai";
+import { envValue, generateAiText, groqApiKeys } from "../_lib/ai";
 
 export const runtime = "nodejs";
 
@@ -318,9 +318,19 @@ Return this exact JSON structure with double quotes only:
 }`;
 }
 
-async function aiScore(company: Company, weights: FactorWeights, publicFeed: string, sourceStatus: string) {
+async function aiScore(
+  company: Company,
+  weights: FactorWeights,
+  publicFeed: string,
+  sourceStatus: string,
+  groqApiKey?: string,
+  laneIndex?: number,
+) {
   const result = await generateAiText({
     task: "scoring",
+    provider: "groq",
+    apiKey: groqApiKey,
+    providerLabel: typeof laneIndex === "number" ? `Groq AI ${laneIndex + 1}` : "Groq",
     system:
       "You are an expert investment screening analyst for a SEBI-registered Category I AIF focused on SME IPO and Pre-IPO equity in India. You have deep knowledge of MCA company data, SEBI listing requirements, BSE SME and NSE Emerge eligibility criteria, Indian sector dynamics, NIC code mapping, and investment due diligence standards. Score objectively. Flag ruthlessly. Never miss a red flag to make a score look better. Your output will be used by an investment committee. Return ONLY valid JSON. No preamble. No explanation outside the JSON structure. No markdown backticks.",
     prompt: buildPrompt(company, weights, publicFeed, sourceStatus),
@@ -331,6 +341,85 @@ async function aiScore(company: Company, weights: FactorWeights, publicFeed: str
   return parseAiJson(result.text);
 }
 
+async function scoreCompanyForResponse(
+  company: Company,
+  weights: FactorWeights,
+  groqApiKey?: string,
+  laneIndex?: number,
+) {
+  let results: SearchResult[] = [];
+  let sourceStatus = "";
+  try {
+    const search = await searchCompany(company);
+    results = search.results;
+    sourceStatus = search.status;
+  } catch (error) {
+    sourceStatus = error instanceof Error ? error.message : "Public-source search failed.";
+  }
+
+  let scored: Company;
+  let fallback = false;
+  try {
+    const parsed = await aiScore(company, weights, sourceContext(results), sourceStatus, groqApiKey, laneIndex);
+    scored = normalizeAiCompany(company, weights, parsed);
+  } catch (error) {
+    fallback = true;
+    scored = scoreCompanyDeterministically(company, weights);
+    scored = {
+      ...scored,
+      statusVerification: {
+        source: "Fallback deterministic scoring",
+        statusFound: sourceStatus || "AI unavailable",
+        verifiedActive: false,
+        rf08Applied: false,
+        rf09Applied: !results.length,
+        checkedAt: new Date().toISOString().slice(0, 10),
+      },
+      redFlags: [...new Set([...(scored.redFlags ?? []), ...(!results.length ? ["RF-09"] : [])])],
+      aiScoringError: error instanceof Error ? error.message : "AI provider returned invalid scoring JSON.",
+    };
+    scored = {
+      ...scored,
+      status: !results.length ? "Unverified" : scored.status,
+      ipoReadinessBand: assignReadinessBand(scored.adjustedScore ?? 0, scored.redFlags ?? [], scored.yellowFlags ?? []),
+    };
+    scored.ipoReadinessMessage = bandMessages[scored.ipoReadinessBand || "Development Stage"];
+  }
+
+  return {
+    company: scored,
+    insight: insightFromCompany(scored),
+    sources: results.map((item) => ({ title: item.title, url: item.url })),
+    sourceStatus,
+    fallback,
+    aiLane: typeof laneIndex === "number" ? laneIndex + 1 : 1,
+  };
+}
+
+async function scoreCompanyBatch(companies: Company[], weights: FactorWeights) {
+  const keys = groqApiKeys().slice(0, 5);
+  const laneCount = Math.min(5, Math.max(1, companies.length));
+  const lanes = Array.from({ length: laneCount }, () => [] as Company[]);
+  companies.forEach((company, index) => {
+    lanes[index % laneCount].push(company);
+  });
+
+  const laneResults = await Promise.all(
+    lanes.map(async (laneCompanies, laneIndex) => {
+      const laneKey = keys.length ? keys[laneIndex % keys.length] : undefined;
+      const scoredLane = [];
+      for (const company of laneCompanies) {
+        scoredLane.push(await scoreCompanyForResponse(company, weights, laneKey, laneIndex));
+      }
+      return scoredLane;
+    }),
+  );
+
+  return laneResults.flat().sort((left, right) => {
+    return companies.findIndex((company) => company.id === left.company.id) - companies.findIndex((company) => company.id === right.company.id);
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
@@ -339,54 +428,42 @@ export async function POST(request: Request) {
       weights?: Partial<FactorWeights>;
     };
     const weights = normalizeWeights(body.weights ?? defaultFactorWeights);
+    if (body.companies?.length && !body.company) {
+      const results = await scoreCompanyBatch(body.companies, weights);
+
+      return NextResponse.json({
+        companies: results.map((item) => item.company),
+        insights: results.map((item) => item.insight),
+        sourcesByCompany: results.reduce<Record<string, Array<{ title?: string; url?: string }>>>((sources, item) => {
+          sources[item.company.id] = item.sources;
+          return sources;
+        }, {}),
+        sourceStatusByCompany: results.reduce<Record<string, string>>((statuses, item) => {
+          statuses[item.company.id] = item.sourceStatus;
+          return statuses;
+        }, {}),
+        fallbacks: results.filter((item) => item.fallback).map((item) => item.company.id),
+        aiLanes: results.reduce<Record<string, number>>((lanes, item) => {
+          lanes[item.company.id] = item.aiLane;
+          return lanes;
+        }, {}),
+        provider: "Groq",
+        model: envValue("GROQ_MODEL_SCORING") || envValue("GROQ_MODEL") || "llama-3.1-8b-instant",
+      });
+    }
+
     const company = body.company ?? body.companies?.[0];
     if (!company) return NextResponse.json({ error: "No company supplied." }, { status: 400 });
 
-    let results: SearchResult[] = [];
-    let sourceStatus = "";
-    try {
-      const search = await searchCompany(company);
-      results = search.results;
-      sourceStatus = search.status;
-    } catch (error) {
-      sourceStatus = error instanceof Error ? error.message : "Public-source search failed.";
-    }
-
-    let scored: Company;
-    let fallback = false;
-    try {
-      const parsed = await aiScore(company, weights, sourceContext(results), sourceStatus);
-      scored = normalizeAiCompany(company, weights, parsed);
-    } catch (error) {
-      fallback = true;
-      scored = scoreCompanyDeterministically(company, weights);
-      scored = {
-        ...scored,
-        statusVerification: {
-          source: "Fallback deterministic scoring",
-          statusFound: sourceStatus || "AI unavailable",
-          verifiedActive: false,
-          rf08Applied: false,
-          rf09Applied: !results.length,
-          checkedAt: new Date().toISOString().slice(0, 10),
-        },
-        redFlags: [...new Set([...(scored.redFlags ?? []), ...(!results.length ? ["RF-09"] : [])])],
-        aiScoringError: error instanceof Error ? error.message : "AI provider returned invalid scoring JSON.",
-      };
-      scored = {
-        ...scored,
-        status: !results.length ? "Unverified" : scored.status,
-        ipoReadinessBand: assignReadinessBand(scored.adjustedScore ?? 0, scored.redFlags ?? [], scored.yellowFlags ?? []),
-      };
-      scored.ipoReadinessMessage = bandMessages[scored.ipoReadinessBand || "Development Stage"];
-    }
+    const result = await scoreCompanyForResponse(company, weights, groqApiKeys()[0], 0);
 
     return NextResponse.json({
-      company: scored,
-      insight: insightFromCompany(scored),
-      sources: results.map((item) => ({ title: item.title, url: item.url })),
-      sourceStatus,
-      fallback,
+      company: result.company,
+      insight: result.insight,
+      sources: result.sources,
+      sourceStatus: result.sourceStatus,
+      fallback: result.fallback,
+      aiLane: result.aiLane,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "AI scoring layer failed." }, { status: 500 });

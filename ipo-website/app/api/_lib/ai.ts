@@ -8,6 +8,9 @@ type GenerateOptions = {
   temperature?: number;
   maxTokens?: number;
   responseJson?: boolean;
+  provider?: "gemini" | "groq" | "openrouter";
+  apiKey?: string;
+  providerLabel?: string;
 };
 
 export type AiResult = {
@@ -42,9 +45,9 @@ export function envValue(key: string) {
 }
 
 const taskProviderOrder: Record<NonNullable<GenerateOptions["task"]>, string[]> = {
-  scoring: ["gemini", "openrouter", "groq"],
+  scoring: ["groq"],
   "company-search": ["openrouter", "gemini", "groq"],
-  cdr: ["gemini", "openrouter", "groq"],
+  cdr: ["gemini"],
   competitor: ["groq", "openrouter", "gemini"],
   director: ["openrouter", "gemini", "groq"],
 };
@@ -71,6 +74,19 @@ function providerOrder(task?: GenerateOptions["task"]) {
 
 function taskModel(base: string, fallback: string, task?: GenerateOptions["task"]) {
   return envValue(envTaskKey(base, task)) || envValue(base) || fallback;
+}
+
+export function groqApiKeys() {
+  const keys = [
+    ...envValue("GROQ_API_KEYS")
+      .split(",")
+      .map((key) => key.trim())
+      .filter(Boolean),
+    ...Array.from({ length: 5 }, (_, index) => envValue(`GROQ_API_KEY_${index + 1}`)).filter(Boolean),
+    envValue("GROQ_API_KEY"),
+  ].filter(Boolean);
+
+  return [...new Set(keys)];
 }
 
 function compactError(provider: string, response: Response, body: string) {
@@ -113,7 +129,7 @@ async function callGemini(options: GenerateOptions): Promise<AiResult> {
 }
 
 async function callGroq(options: GenerateOptions): Promise<AiResult> {
-  const apiKey = envValue("GROQ_API_KEY");
+  const apiKey = options.apiKey || groqApiKeys()[0];
   if (!apiKey) throw new Error("Groq key not configured");
 
   const preferred = taskModel("GROQ_MODEL", "llama-3.1-8b-instant", options.task);
@@ -140,7 +156,7 @@ async function callGroq(options: GenerateOptions): Promise<AiResult> {
     const body = await response.text();
     if (response.ok) {
       const data = JSON.parse(body) as { choices?: Array<{ message?: { content?: string } }> };
-      return { text: data.choices?.[0]?.message?.content || "", provider: "Groq", model };
+      return { text: data.choices?.[0]?.message?.content || "", provider: options.providerLabel || "Groq", model };
     }
     lastError = compactError("Groq", response, body);
     if (response.status !== 429) break;
@@ -183,7 +199,7 @@ async function callOpenRouter(options: GenerateOptions): Promise<AiResult> {
 export async function generateAiText(options: GenerateOptions): Promise<AiResult> {
   const configured = {
     gemini: Boolean(envValue("GEMINI_API_KEY") || envValue("GOOGLE_API_KEY")),
-    groq: Boolean(envValue("GROQ_API_KEY")),
+    groq: Boolean(options.apiKey || groqApiKeys().length),
     openrouter: Boolean(envValue("OPENROUTER_API_KEY")),
   };
   const calls = {
@@ -193,7 +209,7 @@ export async function generateAiText(options: GenerateOptions): Promise<AiResult
   };
   const errors: string[] = [];
 
-  for (const provider of providerOrder(options.task)) {
+  for (const provider of options.provider ? [options.provider] : providerOrder(options.task)) {
     if (!(provider in calls) || !configured[provider as keyof typeof configured]) continue;
     try {
       return await calls[provider as keyof typeof calls](options);

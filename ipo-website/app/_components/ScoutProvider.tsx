@@ -377,6 +377,23 @@ async function scoreCompanyViaApi(company: Company, weights: FactorWeights) {
   return data;
 }
 
+async function scoreCompaniesViaApi(companies: Company[], weights: FactorWeights) {
+  const response = await fetch("/api/scoring-analysis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ companies, weights }),
+  });
+  const data = (await response.json()) as {
+    companies?: Company[];
+    insights?: AiCompanyInsight[];
+    fallbacks?: string[];
+    aiLanes?: Record<string, number>;
+    error?: string;
+  };
+  if (!response.ok) throw new Error(data.error || "AI batch scoring failed.");
+  return data;
+}
+
 async function scoreCompanyWithRetry(company: Company, weights: FactorWeights) {
   try {
     return await scoreCompanyViaApi(company, weights);
@@ -499,36 +516,54 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     setAiCompanyInsights({});
     const insights: Record<string, AiCompanyInsight> = {};
     const scoredCompanies: Company[] = [];
-    let completed = 0;
 
-    for (let index = 0; index < companyList.length; index += 10) {
-      const batch = companyList.slice(index, index + 10);
-      await Promise.all(
-        batch.map(async (company) => {
-          try {
-            const data = await scoreCompanyWithRetry(company, weights);
-            const scored = data.company ? recomputeCompanyScore(data.company, weights) : scoreCompanyDeterministically(company, weights);
-            scoredCompanies.push(scored);
-            if (data.insight) insights[scored.id] = data.insight;
-            setCompanies((current) => current.map((item) => (item.id === scored.id ? scored : item)));
-          } catch (error) {
-            const failed: Company = {
-              ...company,
-              status: "Scoring Failed",
-              adjustedScore: null,
-              compositeScore: null,
-              aiScoringError:
-                error instanceof Error ? error.message : "AI scoring failed for this company. Retry manually or re-upload.",
-            };
-            scoredCompanies.push(failed);
-            setCompanies((current) => current.map((item) => (item.id === failed.id ? failed : item)));
-          } finally {
-            completed += 1;
-            setAiProgress({ total: companyList.length, completed, running: completed < companyList.length });
-            setScoringStatus(`AI screening ${completed} of ${companyList.length} companies`);
-          }
-        }),
+    try {
+      setScoringStatus(`Initial Investment Layer started. Dividing ${companyList.length} companies across 5 Groq AIs.`);
+      const data = await scoreCompaniesViaApi(companyList, weights);
+      (data.companies ?? []).forEach((company) => {
+        const scored = recomputeCompanyScore(company, weights);
+        scoredCompanies.push(scored);
+      });
+      (data.insights ?? []).forEach((insight) => {
+        insights[insight.companyId] = insight;
+      });
+      setCompanies((current) =>
+        current.map((item) => scoredCompanies.find((company) => company.id === item.id) ?? item),
       );
+      setAiProgress({ total: companyList.length, completed: scoredCompanies.length, running: false });
+      setScoringStatus(`AI screening complete. 5 Groq AI lanes processed ${scoredCompanies.length} companies.`);
+    } catch {
+      let completed = 0;
+
+      for (let index = 0; index < companyList.length; index += 10) {
+        const batch = companyList.slice(index, index + 10);
+        await Promise.all(
+          batch.map(async (company) => {
+            try {
+              const data = await scoreCompanyWithRetry(company, weights);
+              const scored = data.company ? recomputeCompanyScore(data.company, weights) : scoreCompanyDeterministically(company, weights);
+              scoredCompanies.push(scored);
+              if (data.insight) insights[scored.id] = data.insight;
+              setCompanies((current) => current.map((item) => (item.id === scored.id ? scored : item)));
+            } catch (error) {
+              const failed: Company = {
+                ...company,
+                status: "Scoring Failed",
+                adjustedScore: null,
+                compositeScore: null,
+                aiScoringError:
+                  error instanceof Error ? error.message : "AI scoring failed for this company. Retry manually or re-upload.",
+              };
+              scoredCompanies.push(failed);
+              setCompanies((current) => current.map((item) => (item.id === failed.id ? failed : item)));
+            } finally {
+              completed += 1;
+              setAiProgress({ total: companyList.length, completed, running: completed < companyList.length });
+              setScoringStatus(`AI screening ${completed} of ${companyList.length} companies`);
+            }
+          }),
+        );
+      }
     }
 
     const finalCompanies = [...scoredCompanies, ...rejectedCompanies];
