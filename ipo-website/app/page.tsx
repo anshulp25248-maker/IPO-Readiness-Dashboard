@@ -34,7 +34,7 @@ function HamburgerButton() {
   );
 }
 
-export default function ScoutSmarterHome() {
+export default function SmartScouterHome() {
   return (
     <main className="relative flex min-h-screen overflow-hidden bg-[linear-gradient(135deg,rgba(31,182,255,0.60),rgba(52,211,153,0.60),rgba(250,204,21,0.60))] px-5 py-10 text-slate-950 sm:px-8">
       <Drawer />
@@ -43,7 +43,7 @@ export default function ScoutSmarterHome() {
       <section className="mx-auto flex w-full max-w-6xl animate-page-enter flex-col items-center justify-center gap-12">
         <header className="space-y-5 text-center">
           <h1 className="bg-gradient-to-r from-slate-950 via-indigo-950 to-purple-900 bg-clip-text font-serif text-5xl font-bold tracking-normal text-transparent sm:text-6xl lg:text-7xl">
-            Scout Smarter
+            Smart Scouter
           </h1>
           <p className="text-base font-medium text-slate-800/80 sm:text-xl">
             An AI Powered Company Search Engine
