@@ -5,15 +5,15 @@ import { Drawer } from "./_components/AppShell";
 import { useScout } from "./_components/ScoutProvider";
 
 const primaryCards = [
-  { title: "Dashboard", href: "/dashboard" },
-  { title: "CDR", href: "/cdr" },
-  { title: "Top 10 Companies", href: "/top-10-companies" },
-];
+  { title: "Dashboard", href: "/dashboard", icon: "dashboard" },
+  { title: "CDR", href: "/cdr", icon: "report" },
+  { title: "Top 10 Companies", href: "/top-10-companies", icon: "ranking" },
+] as const;
 
 const secondaryCards = [
-  { title: "Director Profile", href: "/director-profile" },
-  { title: "Competitors", href: "/competitors" },
-];
+  { title: "Director Profile", href: "/director-profile", icon: "profile" },
+  { title: "Competitors", href: "/competitors", icon: "competitors" },
+] as const;
 
 function HamburgerButton() {
   const { setDrawerOpen } = useScout();
@@ -57,7 +57,7 @@ export default function SmartScouterHome() {
             ))}
           </div>
 
-          <div className="mx-auto grid w-full max-w-3xl gap-4 sm:gap-6 lg:grid-cols-2">
+          <div className="mx-auto grid w-full gap-4 sm:gap-6 lg:max-w-3xl lg:grid-cols-2">
             {secondaryCards.map((card) => (
               <FeatureCard key={card.href} {...card} />
             ))}
