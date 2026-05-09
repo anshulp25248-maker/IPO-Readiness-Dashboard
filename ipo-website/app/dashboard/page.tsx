@@ -14,6 +14,8 @@ export default function DashboardPage() {
     aiScoreReport,
     aiCompanyInsights,
     scoringStatus,
+    parserSummary,
+    aiProgress,
   } = useScout();
   const eligibleCount = rankedCompanies.filter((company) => company.status === "Active").length;
   const topInsight = aiCompanyInsights[topCompany.id];
@@ -63,7 +65,7 @@ export default function DashboardPage() {
               {[
                 ["Eligible Companies", eligibleCount.toString()],
                 ["Prime Score", `${scoreCompany(topCompany)}/100`],
-                ["Equal Weight Factors", `${includedFactorCount} / 7`],
+                ["Weighted Factors", `${includedFactorCount} / 7`],
                 ["Latest Filing", topCompany.lastFiling],
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between rounded-xl bg-white/45 px-4 py-3">
@@ -79,7 +81,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">AI Investment Layer</p>
                 <h3 className="mt-2 font-serif text-3xl font-bold text-slate-950">
-                  {topInsight?.recommendation || "Run Scoring"}
+                  {topCompany.ipoReadinessBand || topInsight?.recommendation || "Run Scoring"}
                 </h3>
               </div>
               {topInsight?.aiScore ? (
@@ -89,7 +91,7 @@ export default function DashboardPage() {
               ) : null}
             </div>
             <p className="mt-4 rounded-xl bg-white/45 px-4 py-3 text-sm font-semibold leading-6 text-slate-900">
-              {topInsight?.rationale || aiScoreReport || scoringStatus || "Upload a file and press Run Scoring to generate the AI scoring layer."}
+              {topCompany.ipoReadinessMessage || topInsight?.rationale || aiScoreReport || scoringStatus || "Upload a file to run parser and AI screening."}
             </p>
             {topInsight?.redFlags?.length ? (
               <div className="mt-3 grid gap-2">
@@ -117,6 +119,45 @@ export default function DashboardPage() {
           </GlassPanel>
         </div>
       </div>
+
+      {parserSummary ? (
+        <GlassPanel className="mt-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">Parser Rejection Summary</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">
+                Parser rejected {parserSummary.rejectedTotal} companies below Rs 5 lakh paid-up capital. {parserSummary.passingToAi} companies passed to AI screening.
+              </p>
+            </div>
+            {aiProgress.total ? (
+              <div className="min-w-[260px]">
+                <div className="h-3 overflow-hidden rounded-full bg-white/40">
+                  <div
+                    className="h-full rounded-full bg-slate-950"
+                    style={{ width: `${Math.round((aiProgress.completed / aiProgress.total) * 100)}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-xs font-black text-slate-950">
+                  AI screening {aiProgress.completed} of {aiProgress.total} companies
+                </p>
+              </div>
+            ) : null}
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+            {[
+              ["Uploaded", parserSummary.totalUploaded],
+              ["Rejected <5L", parserSummary.rejectedCapital],
+              ["Passed to AI", parserSummary.passingToAi],
+              ["Ignored Filters", "Geo / NIC"],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-white/45 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-700">{label}</p>
+                <p className="mt-1 text-2xl font-black text-slate-950">{value}</p>
+              </div>
+            ))}
+          </div>
+        </GlassPanel>
+      ) : null}
 
       <div className="mt-5">
         <CompanyTable limit={5} />

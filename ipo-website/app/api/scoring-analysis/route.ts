@@ -1,27 +1,60 @@
 import { NextResponse } from "next/server";
-import { Company } from "../../_data/companies";
+import { Company, FactorKey, FactorWeights, defaultFactorWeights, factorKeys } from "../../_data/companies";
+import {
+  assignReadinessBand,
+  bandMessages,
+  flagMessages,
+  normalizeWeights,
+  scoreCompanyDeterministically,
+} from "../../_lib/scout-v2";
 import { envValue, generateAiText } from "../_lib/ai";
-import { scoringJsonReportFormat } from "../_lib/report-format";
 
 export const runtime = "nodejs";
 
 type SearchResult = { title?: string; url?: string; content?: string };
-type ParsedInsight = {
-  companyId?: string;
-  companyName?: string;
-  aiScore?: number;
-  recommendation?: string;
-  rationale?: string;
-  strengths?: string[];
-  redFlags?: string[];
-  missingData?: string[];
+type AiFactor = { score?: number; reasoning?: string; ratio_percentage?: number; cluster_match?: boolean };
+type AiScoringJson = {
+  composite_score?: number;
+  adjusted_score?: number;
+  status_verification?: {
+    source?: string;
+    status_found?: string;
+    verified_active?: boolean;
+    rf08_applied?: boolean;
+    rf09_applied?: boolean;
+  };
+  factors?: {
+    sector_strength?: AiFactor;
+    business_model?: AiFactor;
+    paid_up_capital?: AiFactor;
+    director_profile?: AiFactor;
+    filing_compliance?: AiFactor;
+    auth_paidup_ratio?: AiFactor;
+    geography?: AiFactor;
+  };
+  red_flags?: string[];
+  yellow_flags?: string[];
+  ipo_readiness_band?: string;
+  ipo_readiness_reasoning?: string;
+  override_applied?: boolean;
+  override_reason?: string;
+};
+
+const factorMap: Record<string, FactorKey> = {
+  sector_strength: "sector",
+  business_model: "businessModel",
+  paid_up_capital: "paidUpCapital",
+  director_profile: "directorProfile",
+  filing_compliance: "filingCompliance",
+  auth_paidup_ratio: "capitalRatio",
+  geography: "geography",
 };
 
 const tavilyUrl = "https://api.tavily.com/search";
 
-async function tavilySearch(query: string, maxResults = 8) {
+async function tavilySearch(query: string, maxResults = 5) {
   const apiKey = envValue("TAVILY_API_KEY");
-  if (!apiKey) return { results: [], status: "Tavily is not configured; add TAVILY_API_KEY for public-source enrichment." };
+  if (!apiKey) return { results: [], status: "Tavily is not configured." };
   const response = await fetch(tavilyUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -35,20 +68,30 @@ async function tavilySearch(query: string, maxResults = 8) {
     }),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error(`Tavily scoring search failed with ${response.status}`);
+  if (!response.ok) throw new Error(`Tavily search failed with ${response.status}`);
   const data = (await response.json()) as { results?: SearchResult[] };
-  const results = data.results ?? [];
-  return {
-    results,
-    status: results.length ? `Tavily returned ${results.length} public-source snippets.` : "Tavily returned no public-source snippets.",
-  };
+  return { results: data.results ?? [], status: `Tavily returned ${(data.results ?? []).length} snippets.` };
 }
 
-async function tavilySearchMany(queries: string[]) {
-  const batches = await Promise.all(queries.map((query) => tavilySearch(query, 5).catch((error) => ({
-    results: [],
-    status: error instanceof Error ? error.message : "Tavily search failed.",
-  }))));
+async function searchCompany(company: Company) {
+  const sectorTerms = `${company.sector} ${company.nicCode} ${company.activity}`.trim();
+  const queries = [
+    `${company.name} ${company.cin} MCA status active Zauba Tofler`,
+    `${company.name} ${company.cin} site:zaubacorp.com company status directors filing`,
+    `${company.name} ${company.cin} site:tofler.in company status financials directors`,
+    `${company.name} ${company.cin} MCA company master data annual filing`,
+    `${sectorTerms} India sector report latest growth forecast PLI SME IPO`,
+    `${sectorTerms} India thematic report market size CAGR outlook`,
+  ].filter((query) => query.length > 20);
+
+  const batches = await Promise.all(
+    queries.map((query) =>
+      tavilySearch(query).catch((error) => ({
+        results: [],
+        status: error instanceof Error ? error.message : "Search failed.",
+      })),
+    ),
+  );
   const seen = new Set<string>();
   const results = batches
     .flatMap((batch) => batch.results)
@@ -58,34 +101,31 @@ async function tavilySearchMany(queries: string[]) {
       seen.add(key);
       return true;
     })
-    .slice(0, 16);
-
-  const statuses = batches.map((batch) => batch.status).filter(Boolean);
+    .slice(0, 14);
   return {
     results,
-    status: results.length
-      ? `Tavily returned ${results.length} public-source snippets across Zauba/Tofler/MCA and sector/thematic searches.`
-      : statuses.join(" | ") || "Tavily returned no public-source snippets.",
+    status: results.length ? `Public feed returned ${results.length} snippets.` : batches.map((item) => item.status).join(" | "),
   };
 }
 
 function sourceContext(results: SearchResult[]) {
-  return results
-    .slice(0, 12)
-    .map((item, index) => `${index + 1}. ${item.title || "Untitled"}\nURL: ${item.url || "NA"}\nSnippet: ${(item.content || "").slice(0, 420)}`)
-    .join("\n\n") || "No public feed results returned.";
+  return (
+    results
+      .slice(0, 12)
+      .map((item, index) => `${index + 1}. ${item.title || "Untitled"}\nURL: ${item.url || "NA"}\nSnippet: ${(item.content || "").slice(0, 500)}`)
+      .join("\n\n") || "No public feed results returned."
+  );
 }
 
 function extractJsonObject(content: string) {
   const cleaned = content
     .replace(/```json/gi, "```")
     .replace(/```/g, "")
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
     .trim();
   const start = cleaned.indexOf("{");
   if (start === -1) return cleaned;
-
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -111,56 +151,15 @@ function extractJsonObject(content: string) {
   return cleaned.slice(start);
 }
 
-function repairJson(content: string) {
-  return extractJsonObject(content)
-    .replace(/,\s*([}\]])/g, "$1")
-    .replace(/([}\]"])\s*;\s*([{\["])/g, "$1,$2")
-    .replace(/"\s*\n\s*"/g, '",\n"')
-    .replace(/]\s*\n\s*"/g, '],\n"')
-    .replace(/}\s*\n\s*"/g, '},\n"');
+function parseAiJson(content: string) {
+  const raw = extractJsonObject(content).replace(/,\s*([}\]])/g, "$1");
+  return JSON.parse(raw) as AiScoringJson;
 }
 
-function parseJson(content: string) {
-  const candidates = [extractJsonObject(content), repairJson(content)];
-  let lastError: unknown;
-  for (const candidate of candidates) {
-    try {
-      return JSON.parse(candidate) as {
-    report?: string;
-        insights?: ParsedInsight[];
-      };
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error("AI returned invalid JSON");
-}
-
-function extractQuotedValue(content: string, key: string) {
-  const pattern = new RegExp(`"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`,"s");
-  const match = content.match(pattern);
-  if (!match) return "";
-  try {
-    return JSON.parse(`"${match[1]}"`) as string;
-  } catch {
-    return match[1].replace(/\\"/g, '"').replace(/\\n/g, "\n");
-  }
-}
-
-function extractStringArray(content: string, key: string) {
-  const pattern = new RegExp(`"${key}"\\s*:\\s*\\[([\\s\\S]*?)\\]`, "s");
-  const match = content.match(pattern);
-  if (!match) return [];
-  return [...match[1].matchAll(/"((?:\\.|[^"\\])*)"/g)]
-    .map((item) => {
-      try {
-        return JSON.parse(`"${item[1]}"`) as string;
-      } catch {
-        return item[1].replace(/\\"/g, '"').replace(/\\n/g, " ");
-      }
-    })
-    .filter(Boolean)
-    .slice(0, 4);
+function clampFactor(value: unknown, fallback: number) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(0, Math.min(10, Math.round(numeric * 10) / 10));
 }
 
 function clampScore(value: unknown, fallback: number) {
@@ -169,243 +168,225 @@ function clampScore(value: unknown, fallback: number) {
   return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 
-function normalizeInsights(companies: Company[], scores: Record<string, number> | undefined, insights: ParsedInsight[]) {
-  return companies.map((company, index) => {
-    const deterministicScore = scores?.[company.id] ?? 0;
-    const insight =
-      insights.find((item) => item.companyId === company.id) ||
-      insights.find((item) => item.companyName?.toLowerCase().trim() === company.name.toLowerCase().trim()) ||
-      insights[index] ||
-      {};
+function normalizeFlags(flags: unknown) {
+  if (!Array.isArray(flags)) return [];
+  return [...new Set(flags.map((flag) => String(flag).trim().toUpperCase()).filter((flag) => /^(RF|YF)-\d{2}$/.test(flag)))];
+}
 
-    return {
-      companyId: company.id,
-      companyName: insight.companyName || company.name,
-      aiScore: clampScore(deterministicScore, deterministicScore),
-      recommendation:
-        insight.recommendation ||
-        (deterministicScore >= 85 ? "Watchlist" : deterministicScore >= 70 ? "Data Insufficient" : "Reject"),
-      rationale:
-        cleanDisplayText(insight.rationale || "") ||
-        "AI returned an incomplete structured insight, so this view is anchored to the uploaded deterministic score and public-source availability.",
-      strengths: Array.isArray(insight.strengths) ? insight.strengths.map((item) => cleanDisplayText(String(item))).slice(0, 4) : [],
-      redFlags: Array.isArray(insight.redFlags) ? insight.redFlags.map((item) => cleanDisplayText(String(item))).slice(0, 4) : [],
-      missingData: Array.isArray(insight.missingData) ? insight.missingData.map((item) => cleanDisplayText(String(item))).slice(0, 5) : [],
-    };
+function normalizeBand(value: unknown, score: number, redFlags: string[], yellowFlags: string[]) {
+  const raw = String(value || "").toLowerCase();
+  if (raw.includes("ipo ready")) return "IPO Ready" as const;
+  if (raw.includes("near")) return "Near Ready" as const;
+  if (raw.includes("development")) return "Development Stage" as const;
+  if (raw.includes("not")) return "Not Recommended" as const;
+  return assignReadinessBand(score, redFlags, yellowFlags);
+}
+
+function normalizeAiCompany(company: Company, weights: FactorWeights, ai: AiScoringJson) {
+  const fallback = scoreCompanyDeterministically(company, weights);
+  const factors = { ...fallback.factors };
+  const factorReasoning = { ...(fallback.factorReasoning ?? {}) };
+
+  Object.entries(ai.factors ?? {}).forEach(([key, factor]) => {
+    const localKey = factorMap[key];
+    if (!localKey) return;
+    factors[localKey] = clampFactor(factor?.score, factors[localKey]);
+    factorReasoning[localKey] = String(factor?.reasoning || factorReasoning[localKey] || "");
   });
-}
 
-function cleanDisplayText(value: string) {
-  return value
-    .replace(/^\s*["{]?\s*(report|rationale|analysis|insight)\s*["']?\s*:\s*/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+  const aiRedFlags = normalizeFlags(ai.red_flags).filter((flag) => flag.startsWith("RF-"));
+  const aiYellowFlags = normalizeFlags(ai.yellow_flags).filter((flag) => flag.startsWith("YF-"));
+  const redFlags = [...new Set([...(fallback.redFlags ?? []), ...aiRedFlags])];
+  const yellowFlags = [...new Set([...(fallback.yellowFlags ?? []), ...aiYellowFlags])];
+  if (ai.status_verification?.rf08_applied) redFlags.push("RF-08");
+  if (ai.status_verification?.rf09_applied) redFlags.push("RF-09");
+  const uniqueRedFlags = [...new Set(redFlags)];
+  const compositeFallback = clampScore(fallback.compositeScore, 0);
+  const compositeScore = clampScore(ai.composite_score, compositeFallback);
+  const adjustedScore = clampScore(
+    ai.adjusted_score,
+    Math.max(0, compositeScore - (uniqueRedFlags.includes("RF-08") ? 30 : 0)),
+  );
+  const band = normalizeBand(ai.ipo_readiness_band, adjustedScore, uniqueRedFlags, yellowFlags);
+  const statusVerification = {
+    source: ai.status_verification?.source || "Public feed / AI search",
+    statusFound: ai.status_verification?.status_found || (ai.status_verification?.rf09_applied ? "Unverified" : "Active or not contradicted"),
+    verifiedActive: Boolean(ai.status_verification?.verified_active),
+    rf08Applied: Boolean(ai.status_verification?.rf08_applied),
+    rf09Applied: Boolean(ai.status_verification?.rf09_applied),
+    checkedAt: new Date().toISOString().slice(0, 10),
+  };
 
-function fallbackInsights(companies: Company[], scores?: Record<string, number>, reason = "AI provider unavailable") {
-  return companies.map((company) => {
-    const score = scores?.[company.id] ?? 0;
-    const redFlags = [
-      company.lastFiling === "NA" || company.lastFiling === "Data Not Available" ? "Filing date is not available in uploaded data." : "",
-      company.director.credibility?.toLowerCase().includes("limited") ? "Director credibility requires public-source verification." : "",
-      company.paidUpCapital === "Data Not Available" ? "Paid-up capital is missing from uploaded data." : "",
-    ].filter(Boolean);
-
-    return {
-      companyId: company.id,
-      companyName: company.name,
-      aiScore: Math.max(0, Math.min(100, Math.round(score))),
-      recommendation: score >= 85 ? "Watchlist" : score >= 70 ? "Data Insufficient" : "Reject",
-      rationale: `${reason}. Showing a conservative fallback view from uploaded factor scores only; run again after the active AI provider quota resets for live public-source analysis.`,
-      strengths: [
-        `Deterministic Scout Score is ${Math.round(score)}/100.`,
-        `Sector factor is ${company.factors.sector.toFixed(1)}/10 and business-model factor is ${company.factors.businessModel.toFixed(1)}/10.`,
-      ],
-      redFlags,
-      missingData: ["Live AI qualitative analysis was not returned."],
-    };
-  });
-}
-
-function narrativeInsights(companies: Company[], scores: Record<string, number> | undefined, aiText: string, sourceStatus: string) {
-  const extractedReport = extractQuotedValue(aiText, "report");
-  const narrative = (extractedReport || aiText)
-    .replace(/[{}[\]"]/g, " ")
-    .replace(/\s+/g, " ")
-    .slice(0, 700);
-  return companies.map((company) => {
-    const score = scores?.[company.id] ?? 0;
-    const extractedRationale = extractQuotedValue(aiText, "rationale");
-    const strengths = extractStringArray(aiText, "strengths");
-    const redFlags = extractStringArray(aiText, "redFlags");
-    const missingData = extractStringArray(aiText, "missingData");
-    return {
-      companyId: company.id,
-      companyName: company.name,
-      aiScore: Math.max(0, Math.min(100, Math.round(score))),
-      recommendation: score >= 85 ? "Watchlist" : score >= 70 ? "Data Insufficient" : "Reject",
-      rationale:
-        cleanDisplayText(extractedRationale || "") ||
-        (narrative
-          ? `${cleanDisplayText(narrative)} The parser score remains the controlling score because uploaded data is the source of truth.`
-          : `The AI provider returned an incomplete response. ${sourceStatus}`),
-      strengths: strengths.length
-        ? strengths
-        : [
-            `POSITIVE: Parsed Scout Score is ${Math.round(score)}/100, derived from the selected scoring factors rather than model opinion.`,
-            `POSITIVE: Business-model score is ${company.factors.businessModel.toFixed(1)}/10 based on uploaded NIC/activity scarcity logic.`,
-          ],
-      redFlags: redFlags.length
-        ? redFlags
-        : [
-            company.lastFiling === "NA" || company.lastFiling === "Data Not Available"
-              ? "RED FLAG: Filing date is not available in uploaded data and should be verified before investment underwriting."
-              : "",
-          ].filter(Boolean),
-      missingData: missingData.length ? missingData : ["Structured AI JSON was incomplete and was repaired into a usable insight."],
-    };
-  });
-}
-
-async function aiJson(prompt: string) {
-  const result = await generateAiText({
-    task: "scoring",
-    system: "Return only valid compact JSON. Never hallucinate.",
-    prompt,
-    temperature: 0.05,
-    maxTokens: 1800,
-    responseJson: true,
-  });
-  return result;
-}
-
-function scoringTruth(company: Company, score: number | undefined) {
   return {
-    id: company.id,
-    name: company.name,
-    cin: company.cin,
-    uploadedPaidUpCapital: company.paidUpCapital,
-    uploadedAuthorizedCapital: company.authorizedCapital,
-    uploadedPaidUpCapitalRaw: company.paidUpCapitalValue ?? null,
-    uploadedAuthorizedCapitalRaw: company.authorizedCapitalValue ?? null,
-    sector: company.sector,
-    nicCode: company.nicCode,
-    activity: company.activity,
-    director: company.director,
-    deterministicScore: score ?? null,
-    deterministicFactorScores: company.factors,
+    ...company,
+    status: statusVerification.rf08Applied ? "Non-Active" : statusVerification.rf09Applied ? "Unverified" : "Active",
+    factors,
+    factorReasoning,
+    compositeScore,
+    adjustedScore,
+    redFlags: uniqueRedFlags,
+    yellowFlags,
+    ipoReadinessBand: band,
+    ipoReadinessMessage: ai.ipo_readiness_reasoning || bandMessages[band],
+    statusVerification,
+  } satisfies Company;
+}
+
+function insightFromCompany(company: Company) {
+  return {
+    companyId: company.id,
+    companyName: company.name,
+    aiScore: Math.round(company.adjustedScore ?? 0),
+    recommendation: company.ipoReadinessBand || "Development Stage",
+    rationale: company.ipoReadinessMessage || bandMessages[company.ipoReadinessBand || "Development Stage"],
+    strengths: factorKeys
+      .filter((key) => company.factors[key] >= 8)
+      .map((key) => `${key}: ${company.factors[key]}/10.`)
+      .slice(0, 4),
+    redFlags: (company.redFlags ?? []).map((flag) => `${flag}: ${flagMessages[flag] || "Review required."}`),
+    missingData: (company.yellowFlags ?? []).map((flag) => `${flag}: ${flagMessages[flag] || "Review required."}`),
   };
 }
 
-function thematicSearchQueries(companies: Company[]) {
-  const top = companies.slice(0, 5);
-  const identityQuery = top
-    .map((company) => `${company.name} ${company.cin}`)
-    .join(" OR ");
-  const sectorTerms = [...new Set(top.map((company) => `${company.sector} ${company.nicCode} ${company.activity}`))]
-    .slice(0, 4)
-    .join(" OR ");
+function buildPrompt(company: Company, weights: FactorWeights, publicFeed: string, sourceStatus: string) {
+  return `Score this company for SME IPO and Pre-IPO equity screening eligibility.
 
-  return [
-    `${identityQuery} site:zaubacorp.com paid up capital authorized capital directors filing status`,
-    `${identityQuery} site:tofler.in paid up capital financials directors annual filings`,
-    `${identityQuery} MCA company master data charges annual return directors filing compliance`,
-    `${sectorTerms} India sector report IBEF FICCI government outlook policy market size CAGR`,
-    `${sectorTerms} industry thematic report India investment outlook regulatory stance`,
-    `${sectorTerms} competitors listed peers India business activity outlook`,
-  ].filter((query) => query.trim().length > 25);
+COMPANY DATA:
+Name: ${company.name}
+CIN: ${company.cin}
+NIC Code: ${company.nicCode || "NA"}
+Description: ${company.activity || "NA"}
+Paid-up Capital: ${company.paidUpCapital}
+Authorised Capital: ${company.authorizedCapital}
+Incorporation Date: ${company.incorporationDate || "NA"}
+Last Filing Date: ${company.lastFiling || "NA"}
+City: ${company.city}
+State: ${company.state}
+Director Name: ${company.director.name}
+Director DIN: ${company.director.din || "NA"}
+Director Directorships: ${company.director.directorships || "NA"}
+
+WEIGHTS TO APPLY:
+Sector Strength: ${weights.sector}%
+Business Model: ${weights.businessModel}%
+Paid-up Capital: ${weights.paidUpCapital}%
+Director Profile: ${weights.directorProfile}%
+Filing Compliance: ${weights.filingCompliance}%
+Auth/Paid-up Ratio: ${weights.capitalRatio}%
+Geography: ${weights.geography}%
+
+PUBLIC FEED STATUS:
+${sourceStatus}
+
+PUBLIC FEED:
+${publicFeed}
+
+TASKS:
+1. Use the public feed as the search evidence for Zauba Corp, Tofler, MCA portal, and sector/thematic reports.
+2. Verify whether the company appears Active, Non-Active, or Unverified. If no source verifies status, apply RF-09 only.
+3. Apply sector cluster geography validation using NIC code.
+4. Score all seven factors using the Scout Smarter V2 investment rules.
+5. Detect all red flags and yellow flags.
+6. Assign IPO readiness band using adjusted score after any RF-08 penalty.
+
+Return this exact JSON structure with double quotes only:
+{
+  "composite_score": 0,
+  "adjusted_score": 0,
+  "status_verification": {
+    "source": "",
+    "status_found": "",
+    "verified_active": true,
+    "rf08_applied": false,
+    "rf09_applied": false
+  },
+  "factors": {
+    "sector_strength": { "score": 0, "reasoning": "" },
+    "business_model": { "score": 0, "reasoning": "" },
+    "paid_up_capital": { "score": 0, "reasoning": "" },
+    "director_profile": { "score": 0, "reasoning": "" },
+    "filing_compliance": { "score": 0, "reasoning": "" },
+    "auth_paidup_ratio": { "score": 0, "ratio_percentage": 0, "reasoning": "" },
+    "geography": { "score": 0, "cluster_match": false, "reasoning": "" }
+  },
+  "red_flags": [],
+  "yellow_flags": [],
+  "ipo_readiness_band": "IPO Ready",
+  "ipo_readiness_reasoning": "",
+  "override_applied": false,
+  "override_reason": ""
+}`;
+}
+
+async function aiScore(company: Company, weights: FactorWeights, publicFeed: string, sourceStatus: string) {
+  const result = await generateAiText({
+    task: "scoring",
+    system:
+      "You are an expert investment screening analyst for a SEBI-registered Category I AIF focused on SME IPO and Pre-IPO equity in India. You have deep knowledge of MCA company data, SEBI listing requirements, BSE SME and NSE Emerge eligibility criteria, Indian sector dynamics, NIC code mapping, and investment due diligence standards. Score objectively. Flag ruthlessly. Never miss a red flag to make a score look better. Your output will be used by an investment committee. Return ONLY valid JSON. No preamble. No explanation outside the JSON structure. No markdown backticks.",
+    prompt: buildPrompt(company, weights, publicFeed, sourceStatus),
+    temperature: 0.05,
+    maxTokens: 2200,
+    responseJson: true,
+  });
+  return parseAiJson(result.text);
 }
 
 export async function POST(request: Request) {
   try {
-    const { companies, scores } = (await request.json()) as {
+    const body = (await request.json()) as {
+      company?: Company;
       companies?: Company[];
-      scores?: Record<string, number>;
+      weights?: Partial<FactorWeights>;
     };
-    const selectedCompanies = (companies || []).slice(0, 3);
-    if (!selectedCompanies.length) return NextResponse.json({ error: "No companies supplied." }, { status: 400 });
+    const weights = normalizeWeights(body.weights ?? defaultFactorWeights);
+    const company = body.company ?? body.companies?.[0];
+    if (!company) return NextResponse.json({ error: "No company supplied." }, { status: 400 });
 
     let results: SearchResult[] = [];
     let sourceStatus = "";
     try {
-      const tavily = await tavilySearchMany(thematicSearchQueries(selectedCompanies));
-      results = tavily.results;
-      sourceStatus = tavily.status;
+      const search = await searchCompany(company);
+      results = search.results;
+      sourceStatus = search.status;
     } catch (error) {
-      sourceStatus = error instanceof Error ? error.message : "Tavily public-source enrichment failed.";
+      sourceStatus = error instanceof Error ? error.message : "Public-source search failed.";
     }
 
-    const prompt = `You are the AI scoring layer for Scout Smarter. Analyze uploaded Indian company screening data plus public feed snippets. Keep every statement source-aware and conservative.
-
-Do not invent facts. Uploaded paid-up capital, authorized capital, CIN, sector/NIC/activity, factor scores, and deterministic total score are the source of truth.
-The deterministic parser score has already applied the original dashboard logic, including paid-up capital comparison across all companies in the uploaded file, sector strength, geography, business-model scarcity, director profile, authorised/paid-up ratio, and filing compliance. The AI layer must not recalculate or override those factor scores. It must explain the parser score and improve the investment insight by reading public-source evidence.
-
-For filing compliance and company master details, use the public feed snippets from Zauba, Tofler, MCA, and similar sources where available. If the feed does not verify filing dates, charges, directors, authorised capital, or paid-up capital, write a diligence-quality explanation of the missing evidence and request MCA master data, annual returns, and financial statements.
-
-For sector and industry, generate a thematic analysis using public sector reports, government stance, industry outlook, policy support, demand drivers, cyclicality, competitive intensity, and business activity context. This must be written as a proper report, not in small words or short labels.
-
-COMPANY DATA
-${JSON.stringify(selectedCompanies.map((company) => scoringTruth(company, scores?.[company.id])), null, 2)}
-
-PUBLIC FEED
-${sourceStatus}
-
-${sourceContext(results)}
-
-Return strict JSON only. Do not wrap JSON in markdown. Do not include a second JSON object. Do not add comments. Escape every newline inside strings as \\n.
-{
-  "report": "detailed investment-banking style memo with complete paragraphs covering parser score reconciliation, Zauba/Tofler/MCA filing-compliance evidence, sector and industry thematic report, business-model uniqueness, director quality, red flags, positives, and final investment implication",
-  "insights": [
-    {
-      "companyId": "must match input id",
-      "companyName": "...",
-      "aiScore": 0,
-      "recommendation": "Invest / Watchlist / Reject / Data Insufficient",
-      "rationale": "one detailed paragraph explaining the parser score, public-source evidence, sector/industry outlook, business model, filing compliance, and investment implication",
-      "strengths": ["complete-sentence positive paragraph"],
-      "redFlags": ["RED FLAG: complete-sentence risk paragraph"],
-      "missingData": ["complete-sentence missing evidence paragraph"]
-    }
-  ]
-}
-
-AI score should reflect public-data confidence, sector attractiveness, business-model uniqueness, management/compliance evidence, red flags, and missing-data penalties.
-The aiScore field must equal the deterministicScore supplied in COMPANY DATA. The AI layer may explain risk and public-source confidence, but it must not change the parser score.
-
-${scoringJsonReportFormat}`;
-
-    let parsed: ReturnType<typeof parseJson>;
+    let scored: Company;
+    let fallback = false;
     try {
-      const ai = await aiJson(prompt);
-      try {
-        parsed = parseJson(ai.text);
-      } catch {
-        return NextResponse.json({
-          report: ai.text || "AI scoring layer returned narrative analysis.",
-          insights: narrativeInsights(selectedCompanies, scores, ai.text, sourceStatus),
-          sources: results.map((item) => ({ title: item.title, url: item.url })),
-          sourceStatus,
-          provider: ai.provider,
-          model: ai.model,
-          fallback: true,
-        });
-      }
+      const parsed = await aiScore(company, weights, sourceContext(results), sourceStatus);
+      scored = normalizeAiCompany(company, weights, parsed);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "AI provider unavailable";
-      return NextResponse.json({
-        report: `${message}. Conservative fallback generated from uploaded scoring data.`,
-        insights: fallbackInsights(selectedCompanies, scores, message),
-        sources: results.map((item) => ({ title: item.title, url: item.url })),
-        sourceStatus,
-        fallback: true,
-      });
+      fallback = true;
+      scored = scoreCompanyDeterministically(company, weights);
+      scored = {
+        ...scored,
+        statusVerification: {
+          source: "Fallback deterministic scoring",
+          statusFound: sourceStatus || "AI unavailable",
+          verifiedActive: false,
+          rf08Applied: false,
+          rf09Applied: !results.length,
+          checkedAt: new Date().toISOString().slice(0, 10),
+        },
+        redFlags: [...new Set([...(scored.redFlags ?? []), ...(!results.length ? ["RF-09"] : [])])],
+        aiScoringError: error instanceof Error ? error.message : "AI provider returned invalid scoring JSON.",
+      };
+      scored = {
+        ...scored,
+        status: !results.length ? "Unverified" : scored.status,
+        ipoReadinessBand: assignReadinessBand(scored.adjustedScore ?? 0, scored.redFlags ?? [], scored.yellowFlags ?? []),
+      };
+      scored.ipoReadinessMessage = bandMessages[scored.ipoReadinessBand || "Development Stage"];
     }
 
     return NextResponse.json({
-      report: parsed.report || "AI scoring layer completed.",
-      insights: normalizeInsights(selectedCompanies, scores, parsed.insights || []),
+      company: scored,
+      insight: insightFromCompany(scored),
       sources: results.map((item) => ({ title: item.title, url: item.url })),
       sourceStatus,
+      fallback,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "AI scoring layer failed." }, { status: 500 });

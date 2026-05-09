@@ -32,21 +32,66 @@ function Hamburger() {
   );
 }
 
+function ScoringOverlay({ completed, total }: { completed: number; total: number }) {
+  const progress = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+  const circumference = 2 * Math.PI * 48;
+  const offset = circumference - (progress / 100) * circumference;
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/20 backdrop-blur-[2px]"
+      role="status"
+      aria-live="polite"
+      aria-label={`AI scoring ${progress}% complete`}
+    >
+      <div className="relative flex h-44 w-44 items-center justify-center rounded-full border border-white/45 bg-white/70 shadow-[0_28px_90px_rgba(15,23,42,0.28)] backdrop-blur-2xl">
+        <svg className="absolute inset-0 h-full w-full -rotate-90 p-4" viewBox="0 0 120 120" aria-hidden="true">
+          <circle
+            cx="60"
+            cy="60"
+            r="48"
+            fill="none"
+            stroke="rgba(255,255,255,0.76)"
+            strokeWidth="10"
+          />
+          <circle
+            cx="60"
+            cy="60"
+            r="48"
+            fill="none"
+            stroke="rgb(15,23,42)"
+            strokeLinecap="round"
+            strokeWidth="10"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            className="transition-all duration-300"
+          />
+        </svg>
+        <span className="absolute inset-4 animate-spin rounded-full border-2 border-transparent border-t-emerald-600" />
+        <span className="font-mono text-4xl font-black text-slate-950">{progress}%</span>
+      </div>
+    </div>
+  );
+}
+
 export function Drawer() {
   const router = useRouter();
   const {
     drawerOpen,
     setDrawerOpen,
-    pendingFactorSelection,
-    includedFactorCount,
-    toggleFactor,
+    pendingFactorWeights,
+    setPendingFactorWeight,
     runScoring,
     handleUpload,
     resetCompanies,
     uploadStatus,
     scoringStatus,
     companies,
+    aiProgress,
   } = useScout();
+  const pendingWeightTotal = factorKeys.reduce((sum, key) => sum + (pendingFactorWeights[key] ?? 0), 0);
+  const remainingWeight = Math.max(0, 100 - pendingWeightTotal);
+  const weightsAreReady = Math.abs(pendingWeightTotal - 100) < 0.001;
 
   return (
     <>
@@ -64,7 +109,7 @@ export function Drawer() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-800/70">Controls</p>
-            <h2 className="font-serif text-3xl font-bold text-slate-950">Scout Smarter</h2>
+            <h2 className="font-serif text-3xl font-bold text-slate-950">Smart Scouter</h2>
           </div>
           <button
             type="button"
@@ -106,47 +151,84 @@ export function Drawer() {
 
         <div className="mt-5 rounded-2xl border border-white/45 bg-white/50 p-4 shadow-lg backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-black text-slate-950">Company Scoring Factors</p>
-            <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
-              {includedFactorCount}/7
+            <p className="text-sm font-black text-slate-950">V2 Factor Weights</p>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-black ${
+                Math.abs(pendingWeightTotal - 100) < 0.001 ? "bg-slate-950 text-white" : "bg-rose-100 text-rose-950"
+              }`}
+            >
+              {pendingWeightTotal}%
             </span>
           </div>
-          <p className="mt-1 text-xs font-semibold text-slate-800/75">Enabled factors share equal weight.</p>
+          <p className="mt-1 text-xs font-semibold text-slate-800/75">
+            Each factor can be 0% to 30%. Total is capped at 100%.
+          </p>
           <div className="mt-4 grid gap-3">
-            {factorKeys.map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => toggleFactor(key)}
-                className="flex items-center justify-between rounded-xl border border-white/45 bg-white/45 px-4 py-3 text-left shadow backdrop-blur-xl transition hover:bg-white/65"
-              >
-                <span className="text-sm font-bold text-slate-950">{factorLabels[key]}</span>
-                <span
-                  className={`h-6 w-11 rounded-full p-1 transition ${
-                    pendingFactorSelection[key] ? "bg-slate-950" : "bg-white/35"
-                  }`}
+            {factorKeys.map((key) => {
+              const value = pendingFactorWeights[key] ?? 0;
+              const maxForSlider = Math.min(30, value + remainingWeight);
+              const fill = maxForSlider > 0 ? Math.round((value / maxForSlider) * 100) : 0;
+
+              return (
+                <label
+                  key={key}
+                  className="rounded-xl border border-white/45 bg-white/45 px-4 py-3 shadow backdrop-blur-xl"
                 >
-                  <span
-                    className={`block h-4 w-4 rounded-full bg-white transition ${
-                      pendingFactorSelection[key] ? "translate-x-5" : "translate-x-0"
-                    }`}
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-bold text-slate-950">{factorLabels[key]}</span>
+                    <span className="rounded-full bg-slate-950 px-3 py-1 font-mono text-sm font-black text-white">
+                      {value}%
+                    </span>
+                  </span>
+                  <input
+                    type="range"
+                    min="0"
+                    max={maxForSlider}
+                    step="1"
+                    value={value}
+                    onChange={(event) => setPendingFactorWeight(key, Number(event.target.value))}
+                    className="mt-3 h-2 w-full cursor-pointer appearance-none rounded-full accent-slate-950"
+                    style={{
+                      background: `linear-gradient(90deg, rgb(15,23,42) 0%, rgb(15,23,42) ${fill}%, rgba(255,255,255,0.7) ${fill}%, rgba(255,255,255,0.7) 100%)`,
+                    }}
                   />
-                </span>
-              </button>
-            ))}
+                  <span className="mt-2 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.12em] text-slate-800/65">
+                    <span>0%</span>
+                    <span>Max {Math.round(maxForSlider)}%</span>
+                  </span>
+                </label>
+              );
+            })}
           </div>
+          <p className="mt-3 text-xs font-black text-slate-950">
+            {weightsAreReady ? "Total 100% matched" : `${remainingWeight}% left to match 100%`}
+          </p>
           <button
             type="button"
-            onClick={async () => {
-              await runScoring();
+            disabled={!weightsAreReady || aiProgress.running}
+            onClick={() => {
               setDrawerOpen(false);
               router.push("/dashboard");
+              void runScoring();
             }}
-            className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-indigo-950"
+            className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-indigo-950 disabled:cursor-not-allowed disabled:bg-slate-500 disabled:hover:translate-y-0"
           >
-            Run Scoring
+            {aiProgress.running ? "AI Running" : "Run Scoring"}
           </button>
           <p className="mt-3 text-xs font-semibold leading-5 text-slate-800">{scoringStatus}</p>
+          {aiProgress.total ? (
+            <div className="mt-3">
+              <div className="h-2 overflow-hidden rounded-full bg-white/40">
+                <div
+                  className="h-full rounded-full bg-slate-950"
+                  style={{ width: `${Math.round((aiProgress.completed / aiProgress.total) * 100)}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs font-black text-slate-950">
+                AI screening {aiProgress.completed} of {aiProgress.total}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <nav className="mt-5 grid gap-2 rounded-2xl border border-white/45 bg-white/50 p-3 shadow-lg backdrop-blur-xl">
@@ -172,36 +254,48 @@ type AppShellProps = {
   children: React.ReactNode;
 };
 
-export function AppShell({ title, eyebrow = "Scout Smarter", children }: AppShellProps) {
+export function AppShell({ title, eyebrow = "Smart Scouter", children }: AppShellProps) {
+  const { aiProgress } = useScout();
+  const scoringOverlayOpen = aiProgress.running && aiProgress.total > 0;
+
   return (
     <main className="min-h-screen bg-[linear-gradient(135deg,rgba(31,182,255,0.60),rgba(52,211,153,0.60),rgba(250,204,21,0.60))] px-4 py-5 text-slate-950 sm:px-6 lg:px-8">
-      <Drawer />
-      <header className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Hamburger />
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-800/70">
-              {eyebrow}
-            </p>
-            <h1 className="font-serif text-3xl font-bold text-slate-950 sm:text-4xl">
-              {title}
-            </h1>
+      <div
+        className={`min-h-screen transition duration-300 ${
+          scoringOverlayOpen ? "pointer-events-none select-none blur-md" : ""
+        }`}
+      >
+        <Drawer />
+        <header className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Hamburger />
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-800/70">
+                {eyebrow}
+              </p>
+              <h1 className="font-serif text-3xl font-bold text-slate-950 sm:text-4xl">
+                {title}
+              </h1>
+            </div>
           </div>
-        </div>
-        <nav className="hidden items-center gap-2 rounded-2xl border border-white/45 bg-white/50 p-1 shadow-lg backdrop-blur-xl lg:flex">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white/65"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </header>
+          <nav className="hidden items-center gap-2 rounded-2xl border border-white/45 bg-white/50 p-1 shadow-lg backdrop-blur-xl lg:flex">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white/65"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </header>
 
-      <section className="mx-auto mt-7 max-w-7xl animate-page-enter">{children}</section>
+        <section className="mx-auto mt-7 max-w-7xl animate-page-enter">{children}</section>
+      </div>
+      {scoringOverlayOpen ? (
+        <ScoringOverlay completed={aiProgress.completed} total={aiProgress.total} />
+      ) : null}
     </main>
   );
 }

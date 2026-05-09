@@ -3,13 +3,24 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   Company,
+  FactorWeights,
   FactorSelection,
   calculateScore,
+  calculateWeightedScore,
   companies as sampleCompanies,
+  defaultFactorWeights,
   defaultFactorSelection,
   factorKeys,
   rankCompanies,
+  validateWeights,
 } from "../_data/companies";
+import {
+  applyParserFilters,
+  assignReadinessBand,
+  bandMessages,
+  normalizeWeights,
+  scoreCompanyDeterministically,
+} from "../_lib/scout-v2";
 
 export type AiCompanyInsight = {
   companyId: string;
@@ -30,13 +41,18 @@ type ScoutContextValue = {
   topCompany: Company;
   factorSelection: FactorSelection;
   pendingFactorSelection: FactorSelection;
+  factorWeights: FactorWeights;
+  pendingFactorWeights: FactorWeights;
   includedFactorCount: number;
   uploadStatus: string;
   scoringStatus: string;
+  parserSummary: import("../_data/companies").ParserRejectionSummary | null;
+  aiProgress: { total: number; completed: number; running: boolean };
   aiScoreReport: string;
   aiCompanyInsights: Record<string, AiCompanyInsight>;
   scoreCompany: (company: Company) => number;
   toggleFactor: (key: keyof FactorSelection) => void;
+  setPendingFactorWeight: (key: keyof FactorWeights, value: number) => void;
   runScoring: () => Promise<void>;
   handleUpload: (file: File) => Promise<void>;
   replaceCompanies: (companyList: Company[], message: string) => void;
@@ -50,18 +66,14 @@ const storageKey = "scout-smarter-state-v3";
 type StoredScoutState = {
   factorSelection?: FactorSelection;
   pendingFactorSelection?: FactorSelection;
+  factorWeights?: FactorWeights;
+  pendingFactorWeights?: FactorWeights;
 };
 
 type UploadParseResponse = {
   rows?: Record<string, string>[];
   rowCount?: number;
   fileName?: string;
-  error?: string;
-};
-
-type ScoringAnalysisResponse = {
-  report?: string;
-  insights?: AiCompanyInsight[];
   error?: string;
 };
 
@@ -107,7 +119,7 @@ function normalizeRow(row: Record<string, string>) {
   }, {});
 }
 
-const paidUpCapitalFloor = 1_000_000;
+const paidUpCapitalFloor = 500_000;
 
 function parseMoney(value: string) {
   const normalized = String(value || "").toLowerCase().replace(/,/g, "");
@@ -270,15 +282,6 @@ function scoreDirector(directorships: number, education: string) {
   return 2;
 }
 
-function isActiveCompanyStatus(value: string) {
-  const normalized = String(value || "").toLowerCase();
-  if (!normalized) return true;
-  if (/\b(inactive|strike|struck|closed|liquidation|liquidated|dissolved|dormant|amalgamated)\b/.test(normalized)) {
-    return false;
-  }
-  return normalized.includes("active");
-}
-
 function mapRowsToCompanies(rows: Record<string, string>[]) {
   const normalizedRows = rows.map(normalizeRow);
   const paidValues = normalizedRows
@@ -305,14 +308,7 @@ function mapRowsToCompanies(rows: Record<string, string>[]) {
     const scarcityCount = scarcity.get(scarcityKey) ?? 1;
     const directorships = Number(getField(row, ["director_directorships", "directorships"], "0")) || 0;
     const education = getField(row, ["director_education", "education"], "NA");
-    const activeStatus = isActiveCompanyStatus(getField(row, ["status", "company_status", "company status"], "Active"));
     const filing = scoreFiling(getField(row, ["last_filing_date", "latest filing date", "last_filing"], ""));
-    const rejectReasons = [
-      !activeStatus ? "Company status is not active" : "",
-      paid > 0 && paid < paidUpCapitalFloor ? "Paid-up capital is below Rs 10 lakh" : "",
-      filing.reject ? "Latest filing is older than 24 months" : "",
-    ].filter(Boolean);
-    const status: Company["status"] = rejectReasons.length ? "Rejected" : "Active";
 
     return {
       id: `${slug(name)}-${index}`,
@@ -321,8 +317,7 @@ function mapRowsToCompanies(rows: Record<string, string>[]) {
       sector,
       city,
       state,
-      status,
-      rejectionReason: rejectReasons.join("; ") || undefined,
+      status: "Active",
       paidUpCapital: formatMoney(paid),
       authorizedCapital: formatMoney(authorized),
       paidUpCapitalValue: paid,
@@ -330,11 +325,13 @@ function mapRowsToCompanies(rows: Record<string, string>[]) {
       nicCode,
       activity,
       lastFiling: getField(row, ["last_filing_date", "latest filing date", "last_filing"], "NA"),
+      incorporationDate: getField(row, ["incorporation_date", "date_of_incorporation", "date of incorporation"], ""),
       director: {
         name: getField(row, ["director", "director_name", "directors"], "NA"),
         role: getField(row, ["director_role", "role"], "Director"),
         education,
         directorships,
+        din: getField(row, ["director_din", "din"], ""),
         credibility: directorships >= 2 ? "Multiple directorship signal found" : "Limited public directorship signal",
       },
       factors: {
@@ -355,9 +352,45 @@ function mapRowsToCompanies(rows: Record<string, string>[]) {
   });
 }
 
+function recomputeCompanyScore(company: Company, weights: FactorWeights): Company {
+  if (company.status === "Rejected" || company.status === "Scoring Failed") return company;
+  const compositeScore = calculateWeightedScore(company, weights);
+  const adjustedScore = Math.max(0, compositeScore - (company.redFlags?.includes("RF-08") ? 30 : 0));
+  const band = assignReadinessBand(adjustedScore, company.redFlags ?? [], company.yellowFlags ?? []);
+  return {
+    ...company,
+    compositeScore,
+    adjustedScore,
+    ipoReadinessBand: band,
+    ipoReadinessMessage: bandMessages[band],
+  };
+}
+
+async function scoreCompanyViaApi(company: Company, weights: FactorWeights) {
+  const response = await fetch("/api/scoring-analysis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ company, weights }),
+  });
+  const data = (await response.json()) as { company?: Company; insight?: AiCompanyInsight; error?: string };
+  if (!response.ok) throw new Error(data.error || "AI scoring failed.");
+  return data;
+}
+
+async function scoreCompanyWithRetry(company: Company, weights: FactorWeights) {
+  try {
+    return await scoreCompanyViaApi(company, weights);
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    return scoreCompanyViaApi(company, weights);
+  }
+}
+
 export function ScoutProvider({ children }: { children: React.ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [companies, setCompanies] = useState<Company[]>(sampleCompanies);
+  const [companies, setCompanies] = useState<Company[]>(() =>
+    sampleCompanies.map((company) => scoreCompanyDeterministically(company, defaultFactorWeights)),
+  );
   const [factorSelection, setFactorSelection] = useState<FactorSelection>(() => ({
     ...defaultFactorSelection,
     ...readStoredState().factorSelection,
@@ -366,8 +399,16 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     ...defaultFactorSelection,
     ...(readStoredState().pendingFactorSelection ?? readStoredState().factorSelection),
   }));
+  const [factorWeights, setFactorWeights] = useState<FactorWeights>(() =>
+    normalizeWeights(readStoredState().factorWeights),
+  );
+  const [pendingFactorWeights, setPendingFactorWeights] = useState<FactorWeights>(() =>
+    normalizeWeights(readStoredState().pendingFactorWeights ?? readStoredState().factorWeights),
+  );
   const [uploadStatus, setUploadStatus] = useState("Sample company universe loaded.");
-  const [scoringStatus, setScoringStatus] = useState("Scoring uses all seven factors with equal weight.");
+  const [scoringStatus, setScoringStatus] = useState("Scoring uses Scout Smarter V2 default weighted factors.");
+  const [parserSummary, setParserSummary] = useState<import("../_data/companies").ParserRejectionSummary | null>(null);
+  const [aiProgress, setAiProgress] = useState({ total: 0, completed: 0, running: false });
   const [aiScoreReport, setAiScoreReport] = useState("");
   const [aiCompanyInsights, setAiCompanyInsights] = useState<Record<string, AiCompanyInsight>>({});
 
@@ -375,21 +416,21 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     try {
       window.localStorage.setItem(
         storageKey,
-        JSON.stringify({ factorSelection, pendingFactorSelection }),
+        JSON.stringify({ factorSelection, pendingFactorSelection, factorWeights, pendingFactorWeights }),
       );
       window.localStorage.removeItem("scout-smarter-state");
       window.localStorage.removeItem("scout-smarter-state-v2");
     } catch {
       window.localStorage.removeItem(storageKey);
     }
-  }, [factorSelection, pendingFactorSelection]);
+  }, [factorSelection, pendingFactorSelection, factorWeights, pendingFactorWeights]);
 
-  const ranked = useMemo(() => rankCompanies(companies, factorSelection), [companies, factorSelection]);
-  const includedFactorCount = factorKeys.filter((key) => factorSelection[key]).length;
-  const pendingFactorCount = factorKeys.filter((key) => pendingFactorSelection[key]).length;
+  const ranked = useMemo(() => rankCompanies(companies, factorWeights), [companies, factorWeights]);
+  const includedFactorCount = factorKeys.length;
 
   async function handleUpload(file: File) {
-    setUploadStatus(`Reading ${file.name} with pandas parser...`);
+    setUploadStatus(`Reading ${file.name} with parser...`);
+    setAiProgress({ total: 0, completed: 0, running: false });
 
     let rows: Record<string, string>[] = [];
     try {
@@ -417,72 +458,145 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
       setUploadStatus("No valid company records found in the uploaded file.");
       return;
     }
-    setCompanies(parsedCompanies);
-    setUploadStatus(`${parsedCompanies.length} companies uploaded. Ready to run scoring.`);
-    setScoringStatus("Uploaded MCA data is ready. Choose factors, then press Run Scoring.");
+    const parser = applyParserFilters(parsedCompanies);
+    const initialPassing = parser.passing.map((company) => scoreCompanyDeterministically(company, factorWeights));
+    setParserSummary(parser.summary);
+    setCompanies([...initialPassing, ...parser.rejected]);
+    setAiScoreReport("");
+    setAiCompanyInsights({});
+    setUploadStatus(
+      `Parser complete. ${parser.summary.rejectedTotal} rejected, ${parser.summary.passingToAi} passing to AI screening.`,
+    );
+    setScoringStatus("Parser complete. Proceeding to AI screening now.");
+    await runAiScreening(initialPassing, factorWeights, parser.rejected);
   }
 
   function toggleFactor(key: keyof FactorSelection) {
     setPendingFactorSelection((current) => ({ ...current, [key]: !current[key] }));
   }
 
-  async function runScoring() {
-    setFactorSelection(pendingFactorSelection);
+  function setPendingFactorWeight(key: keyof FactorWeights, value: number) {
+    setPendingFactorWeights((current) => {
+      const otherTotal = factorKeys.reduce((sum, factorKey) => {
+        return factorKey === key ? sum : sum + Number(current[factorKey] ?? 0);
+      }, 0);
+      const maxAllowed = Math.min(30, Math.max(0, 100 - otherTotal));
+
+      return {
+        ...current,
+        [key]: Math.max(0, Math.min(maxAllowed, Number(value) || 0)),
+      };
+    });
+  }
+
+  async function runAiScreening(companyList: Company[], weights: FactorWeights, rejectedCompanies: Company[] = []) {
+    if (!companyList.length) {
+      setScoringStatus("No companies passed the parser into AI screening.");
+      return;
+    }
+    setAiProgress({ total: companyList.length, completed: 0, running: true });
     setAiScoreReport("");
     setAiCompanyInsights({});
-    setScoringStatus(
-      `${pendingFactorCount} factor${pendingFactorCount === 1 ? "" : "s"} included. Running AI scoring layer...`,
+    const insights: Record<string, AiCompanyInsight> = {};
+    const scoredCompanies: Company[] = [];
+    let completed = 0;
+
+    for (let index = 0; index < companyList.length; index += 10) {
+      const batch = companyList.slice(index, index + 10);
+      await Promise.all(
+        batch.map(async (company) => {
+          try {
+            const data = await scoreCompanyWithRetry(company, weights);
+            const scored = data.company ? recomputeCompanyScore(data.company, weights) : scoreCompanyDeterministically(company, weights);
+            scoredCompanies.push(scored);
+            if (data.insight) insights[scored.id] = data.insight;
+            setCompanies((current) => current.map((item) => (item.id === scored.id ? scored : item)));
+          } catch (error) {
+            const failed: Company = {
+              ...company,
+              status: "Scoring Failed",
+              adjustedScore: null,
+              compositeScore: null,
+              aiScoringError:
+                error instanceof Error ? error.message : "AI scoring failed for this company. Retry manually or re-upload.",
+            };
+            scoredCompanies.push(failed);
+            setCompanies((current) => current.map((item) => (item.id === failed.id ? failed : item)));
+          } finally {
+            completed += 1;
+            setAiProgress({ total: companyList.length, completed, running: completed < companyList.length });
+            setScoringStatus(`AI screening ${completed} of ${companyList.length} companies`);
+          }
+        }),
+      );
+    }
+
+    const finalCompanies = [...scoredCompanies, ...rejectedCompanies];
+    setCompanies((current) =>
+      current.map((item) => finalCompanies.find((company) => company.id === item.id) ?? item),
     );
+    setAiCompanyInsights(insights);
+    const ready = scoredCompanies.filter((company) => company.ipoReadinessBand === "IPO Ready").length;
+    const near = scoredCompanies.filter((company) => company.ipoReadinessBand === "Near Ready").length;
+    const development = scoredCompanies.filter((company) => company.ipoReadinessBand === "Development Stage").length;
+    const notRecommended = scoredCompanies.filter((company) => company.ipoReadinessBand === "Not Recommended").length;
+    const redAttention = scoredCompanies.filter((company) => (company.redFlags?.length ?? 0) > 0).length;
+    setAiProgress({ total: companyList.length, completed: companyList.length, running: false });
+    setAiScoreReport(
+      `AI screening complete. ${scoredCompanies.length} companies scored and ready. ${redAttention} require attention (Red Flags). ${ready} IPO Ready. ${near} Near Ready. ${development} Development Stage. ${notRecommended} Not Recommended.`,
+    );
+    setScoringStatus("AI screening complete. Results are sorted by adjusted composite score and flags.");
+  }
 
-    const selectedRanked = rankCompanies(companies, pendingFactorSelection).slice(0, 10);
-    const scores = selectedRanked.reduce<Record<string, number>>((values, company) => {
-      values[company.id] = calculateScore(company, pendingFactorSelection);
-      return values;
-    }, {});
+  async function runScoring() {
+    if (!validateWeights(pendingFactorWeights)) {
+      const total = factorKeys.reduce((sum, key) => sum + Number(pendingFactorWeights[key] ?? 0), 0);
+      setScoringStatus(`Weight error: total must equal 100%. Current total is ${total}%.`);
+      return;
+    }
+    const scorableCompanies = companies.filter((company) => company.status !== "Rejected");
+    const rejectedCompanies = companies.filter((company) => company.status === "Rejected");
+    setAiScoreReport("");
+    setFactorSelection(defaultFactorSelection);
+    setPendingFactorSelection(defaultFactorSelection);
+    setFactorWeights(pendingFactorWeights);
 
-    if (!selectedRanked.length) {
-      setScoringStatus("No eligible companies found after filters.");
+    if (!scorableCompanies.length) {
+      setScoringStatus("No companies are available for AI scoring.");
+      setAiProgress({ total: 0, completed: 0, running: false });
       return;
     }
 
-    try {
-      const response = await fetch("/api/scoring-analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companies: selectedRanked, scores }),
-      });
-      const data = (await response.json()) as ScoringAnalysisResponse;
-      if (!response.ok) throw new Error(data.error || "AI scoring layer failed.");
-      const insightMap = (data.insights || []).reduce<Record<string, AiCompanyInsight>>((map, insight) => {
-        if (insight.companyId) map[insight.companyId] = insight;
-        return map;
-      }, {});
-      setAiScoreReport(data.report || "AI scoring layer completed.");
-      setAiCompanyInsights(insightMap);
-      setScoringStatus("Scoring complete. AI investment-readiness layer generated for the top companies.");
-    } catch (error) {
-      setScoringStatus(
-        `${pendingFactorCount} factor${pendingFactorCount === 1 ? "" : "s"} included. AI layer unavailable: ${
-          error instanceof Error ? error.message : "unknown error"
-        }`,
-      );
-    }
+    const preparedCompanies = scorableCompanies.map((company) => recomputeCompanyScore(company, pendingFactorWeights));
+    setCompanies((current) =>
+      current.map((company) => preparedCompanies.find((updated) => updated.id === company.id) ?? company),
+    );
+    setScoringStatus(`AI scoring started for ${preparedCompanies.length} companies.`);
+    await runAiScreening(preparedCompanies, pendingFactorWeights, rejectedCompanies);
   }
 
   function replaceCompanies(companyList: Company[], message: string) {
-    setCompanies(companyList);
+    const parser = applyParserFilters(companyList);
+    const scored = parser.passing.map((company) => scoreCompanyDeterministically(company, factorWeights));
+    setParserSummary(parser.summary);
+    setCompanies([...scored, ...parser.rejected]);
     setUploadStatus(message);
     setAiScoreReport("");
     setAiCompanyInsights({});
-    setScoringStatus("AI feed loaded. Press Run Scoring after choosing factors.");
+    setScoringStatus("AI feed loaded into Scout V2 parser rules. Press Run Scoring to recalculate weights.");
   }
 
   function resetCompanies() {
-    setCompanies(sampleCompanies);
+    const seeded = sampleCompanies.map((company) => scoreCompanyDeterministically(company, defaultFactorWeights));
+    setCompanies(seeded);
     setFactorSelection(defaultFactorSelection);
     setPendingFactorSelection(defaultFactorSelection);
+    setFactorWeights(defaultFactorWeights);
+    setPendingFactorWeights(defaultFactorWeights);
+    setParserSummary(null);
+    setAiProgress({ total: 0, completed: 0, running: false });
     setUploadStatus("Sample company universe loaded.");
-    setScoringStatus("Scoring uses all seven factors with equal weight.");
+    setScoringStatus("Scoring uses Scout Smarter V2 default weighted factors.");
     setAiScoreReport("");
     setAiCompanyInsights({});
   }
@@ -495,13 +609,18 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     topCompany: ranked[0] ?? sampleCompanies[0],
     factorSelection,
     pendingFactorSelection,
+    factorWeights,
+    pendingFactorWeights,
     includedFactorCount,
     uploadStatus,
     scoringStatus,
+    parserSummary,
+    aiProgress,
     aiScoreReport,
     aiCompanyInsights,
-    scoreCompany: (company) => calculateScore(company, factorSelection),
+    scoreCompany: (company) => calculateScore(company, factorWeights),
     toggleFactor,
+    setPendingFactorWeight,
     runScoring,
     handleUpload,
     replaceCompanies,

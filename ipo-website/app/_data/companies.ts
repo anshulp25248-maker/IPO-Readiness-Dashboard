@@ -14,7 +14,7 @@ export type Company = {
   sector: string;
   city: string;
   state: string;
-  status: "Active" | "Rejected";
+  status: "Active" | "Rejected" | "Non-Active" | "Unverified" | "Scoring Failed";
   rejectionReason?: string;
   paidUpCapital: string;
   authorizedCapital: string;
@@ -23,14 +23,32 @@ export type Company = {
   nicCode: string;
   activity: string;
   lastFiling: string;
+  incorporationDate?: string;
   director: {
     name: string;
     role: string;
     education: string;
     directorships: number;
+    din?: string;
     credibility: string;
   };
   factors: Record<FactorKey, number>;
+  factorReasoning?: Partial<Record<FactorKey, string>>;
+  compositeScore?: number | null;
+  adjustedScore?: number | null;
+  ipoReadinessBand?: IpoReadinessBand;
+  ipoReadinessMessage?: string;
+  redFlags?: string[];
+  yellowFlags?: string[];
+  statusVerification?: {
+    source: string;
+    statusFound: string;
+    verifiedActive: boolean;
+    rf08Applied: boolean;
+    rf09Applied: boolean;
+    checkedAt?: string;
+  };
+  aiScoringError?: string;
   competitors: string[];
 };
 
@@ -47,11 +65,32 @@ export const factorLabels: Record<FactorKey, string> = {
 export const factorKeys = Object.keys(factorLabels) as FactorKey[];
 
 export type FactorSelection = Record<FactorKey, boolean>;
+export type FactorWeights = Record<FactorKey, number>;
+export type IpoReadinessBand = "IPO Ready" | "Near Ready" | "Development Stage" | "Not Recommended";
+
+export type ParserRejectionSummary = {
+  totalUploaded: number;
+  rejectedCapital: number;
+  rejectedGeography: number;
+  rejectedNic: number;
+  rejectedTotal: number;
+  passingToAi: number;
+};
 
 export const defaultFactorSelection = factorKeys.reduce((selection, key) => {
   selection[key] = true;
   return selection;
 }, {} as FactorSelection);
+
+export const defaultFactorWeights: FactorWeights = {
+  sector: 20,
+  businessModel: 20,
+  paidUpCapital: 18,
+  directorProfile: 16,
+  filingCompliance: 12,
+  capitalRatio: 8,
+  geography: 6,
+};
 
 export const companies: Company[] = [
   {
@@ -221,24 +260,69 @@ export const companies: Company[] = [
   },
 ];
 
-export function calculateScore(company: Company, selection: FactorSelection = defaultFactorSelection) {
+function isFactorSelection(value: FactorSelection | FactorWeights): value is FactorSelection {
+  return Object.values(value).every((item) => typeof item === "boolean");
+}
+
+export function weightsFromSelection(selection: FactorSelection): FactorWeights {
+  const included = factorKeys.filter((key) => selection[key]);
+  if (!included.length) {
+    return factorKeys.reduce((weights, key) => {
+      weights[key] = 0;
+      return weights;
+    }, {} as FactorWeights);
+  }
+  const equalWeight = 100 / included.length;
+  return factorKeys.reduce((weights, key) => {
+    weights[key] = selection[key] ? equalWeight : 0;
+    return weights;
+  }, {} as FactorWeights);
+}
+
+export function validateWeights(weights: FactorWeights) {
+  const values = factorKeys.map((key) => Number(weights[key] ?? 0));
+  const total = values.reduce((sum, weight) => sum + weight, 0);
+  return values.every((weight) => weight >= 0 && weight <= 30) && Math.abs(total - 100) < 0.001;
+}
+
+export function calculateWeightedScore(company: Company, weights: FactorWeights = defaultFactorWeights) {
+  if (company.status === "Rejected" || !validateWeights(weights)) {
+    return 0;
+  }
+  const weighted = factorKeys.reduce((sum, key) => {
+    return sum + (Number(company.factors[key] ?? 0) * Number(weights[key] ?? 0)) / 100;
+  }, 0);
+  return Math.max(0, Math.min(100, Math.round(weighted * 10)));
+}
+
+export function calculateScore(
+  company: Company,
+  weightsOrSelection: FactorWeights | FactorSelection = defaultFactorWeights,
+) {
   if (company.status === "Rejected") {
     return 0;
   }
-  const factorScores = factorKeys
-    .filter((key) => selection[key])
-    .map((key) => company.factors[key]);
-  if (factorScores.length === 0) {
-    return 0;
+  if (typeof company.adjustedScore === "number") {
+    return Math.max(0, Math.min(100, Math.round(company.adjustedScore)));
   }
-  const rawAverage = factorScores.reduce((sum, score) => sum + score, 0) / factorScores.length;
-  return Math.round(rawAverage * 10);
+  if (typeof company.compositeScore === "number") {
+    return Math.max(0, Math.min(100, Math.round(company.compositeScore)));
+  }
+  const weights = isFactorSelection(weightsOrSelection) ? weightsFromSelection(weightsOrSelection) : weightsOrSelection;
+  return calculateWeightedScore(company, weights);
 }
 
-export function rankCompanies(companyList: Company[], selection: FactorSelection = defaultFactorSelection) {
+export function rankCompanies(
+  companyList: Company[],
+  weightsOrSelection: FactorWeights | FactorSelection = defaultFactorWeights,
+) {
   return companyList
-    .filter((company) => company.status === "Active")
-    .sort((a, b) => calculateScore(b, selection) - calculateScore(a, selection));
+    .filter((company) => company.status !== "Rejected")
+    .sort((a, b) => {
+      const scoreDelta = calculateScore(b, weightsOrSelection) - calculateScore(a, weightsOrSelection);
+      if (scoreDelta) return scoreDelta;
+      return (a.redFlags?.length ?? 0) - (b.redFlags?.length ?? 0);
+    });
 }
 
 export const rankedCompanies = rankCompanies(companies);
