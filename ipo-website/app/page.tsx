@@ -36,13 +36,13 @@ function HamburgerButton() {
 
 export default function SmartScouterHome() {
   return (
-    <main className="relative flex min-h-screen overflow-hidden bg-[linear-gradient(135deg,rgba(31,182,255,0.60),rgba(52,211,153,0.60),rgba(250,204,21,0.60))] px-5 py-10 text-slate-950 sm:px-8">
+    <main className="relative flex min-h-screen overflow-x-hidden bg-[linear-gradient(135deg,rgba(31,182,255,0.60),rgba(52,211,153,0.60),rgba(250,204,21,0.60))] px-4 py-8 text-slate-950 sm:px-8 sm:py-10">
       <Drawer />
       <HamburgerButton />
 
-      <section className="mx-auto flex w-full max-w-6xl animate-page-enter flex-col items-center justify-center gap-12">
-        <header className="space-y-5 text-center">
-          <h1 className="bg-gradient-to-r from-slate-950 via-indigo-950 to-purple-900 bg-clip-text font-serif text-5xl font-bold tracking-normal text-transparent sm:text-6xl lg:text-7xl">
+      <section className="mx-auto flex w-full max-w-6xl animate-page-enter flex-col items-center justify-center gap-8 pt-16 sm:gap-12 sm:pt-0">
+        <header className="space-y-4 text-center sm:space-y-5">
+          <h1 className="bg-gradient-to-r from-slate-950 via-indigo-950 to-purple-900 bg-clip-text font-serif text-4xl font-bold tracking-normal text-transparent sm:text-6xl lg:text-7xl">
             Smart Scouter
           </h1>
           <p className="text-base font-medium text-slate-800/80 sm:text-xl">
@@ -50,14 +50,14 @@ export default function SmartScouterHome() {
           </p>
         </header>
 
-        <nav className="grid w-full gap-6">
-          <div className="grid gap-6 md:grid-cols-3">
+        <nav className="grid w-full gap-4 sm:gap-6">
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
             {primaryCards.map((card) => (
               <FeatureCard key={card.href} {...card} />
             ))}
           </div>
 
-          <div className="mx-auto grid w-full max-w-3xl gap-6 md:grid-cols-2">
+          <div className="mx-auto grid w-full max-w-3xl gap-4 sm:gap-6 lg:grid-cols-2">
             {secondaryCards.map((card) => (
               <FeatureCard key={card.href} {...card} />
             ))}
