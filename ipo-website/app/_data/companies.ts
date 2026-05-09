@@ -73,6 +73,8 @@ export type ParserRejectionSummary = {
   rejectedCapital: number;
   rejectedGeography: number;
   rejectedNic: number;
+  rejectedCommunityService: number;
+  rejectedGovernment: number;
   rejectedTotal: number;
   passingToAi: number;
 };

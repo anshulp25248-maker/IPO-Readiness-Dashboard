@@ -93,6 +93,54 @@ function inRange(code: number | null, start: number, end: number) {
   return code !== null && code >= start && code <= end;
 }
 
+function companyText(company: Company) {
+  return lower(
+    [
+      company.name,
+      company.sector,
+      company.activity,
+      company.nicCode,
+      company.city,
+      company.state,
+      company.director?.role,
+      company.director?.credibility,
+    ].join(" "),
+  );
+}
+
+function isCommunityServiceCompany(company: Company) {
+  const code = nicNumber(company.nicCode);
+  const body = companyText(company);
+
+  if (inRange(code, 87000, 88999) || inRange(code, 94000, 94999) || inRange(code, 97000, 99000)) return true;
+
+  return /\b(community service|community.*social services|social service|social services|social work|charitable|charity|ngo|non government|non-government|non profit|non-profit|not for profit|not-for-profit|section 8|section-8|foundation|trust|society|welfare association|welfare society|religious|temple|mosque|church|gurudwara|ashram|club|membership organisation|membership organization|trade association|chamber of commerce|resident welfare|rwa)\b/.test(
+    body,
+  );
+}
+
+function isGovernmentCompany(company: Company) {
+  const code = nicNumber(company.nicCode);
+  const body = companyText(company);
+
+  if (inRange(code, 84100, 84399)) return true;
+
+  return /\b(government|govt|govt\.|public sector|psu|state owned|state-owned|central government|state government|government of|govt of|municipal|municipality|panchayat|ministry|department|development authority|industrial development authority|urban development authority|state electricity|state power|state road|state transport|state industrial|state infrastructure|electricity board|water board|housing board|transport corporation|road transport|smart city mission|cantonment|zilla parishad|gram panchayat)\b/.test(
+    body,
+  );
+}
+
+function rejectCompany(company: Company, rejectionReason: string) {
+  return {
+    ...company,
+    status: "Rejected",
+    rejectionReason,
+    redFlags: company.redFlags ?? [],
+    yellowFlags: company.yellowFlags ?? [],
+    aiScoringError: `Parser rejected: ${rejectionReason}`,
+  } satisfies Company;
+}
+
 function monthsSince(value: string) {
   const raw = lower(value);
   const relative = raw.match(/(\d+)\s*(month|months|year|years)\s*ago/);
@@ -156,6 +204,8 @@ export function applyParserFilters(companies: Company[]) {
     rejectedCapital: 0,
     rejectedGeography: 0,
     rejectedNic: 0,
+    rejectedCommunityService: 0,
+    rejectedGovernment: 0,
     rejectedTotal: 0,
     passingToAi: 0,
   };
@@ -167,14 +217,19 @@ export function applyParserFilters(companies: Company[]) {
     const paid = company.paidUpCapitalValue ?? 0;
     if (paid < 500_000) {
       summary.rejectedCapital += 1;
-      rejected.push({
-        ...company,
-        status: "Rejected",
-        rejectionReason: "Paid-up capital below Rs 5 Lakh",
-        redFlags: company.redFlags ?? [],
-        yellowFlags: company.yellowFlags ?? [],
-        aiScoringError: "Parser rejected: Paid-up capital below Rs 5 Lakh",
-      });
+      rejected.push(rejectCompany(company, "Paid-up capital below Rs 5 Lakh"));
+      return;
+    }
+
+    if (isCommunityServiceCompany(company)) {
+      summary.rejectedCommunityService += 1;
+      rejected.push(rejectCompany(company, "Community service, NGO, trust, society, welfare, or non-profit profile"));
+      return;
+    }
+
+    if (isGovernmentCompany(company)) {
+      summary.rejectedGovernment += 1;
+      rejected.push(rejectCompany(company, "Government, public-sector, municipal, authority, or state-owned profile"));
       return;
     }
 

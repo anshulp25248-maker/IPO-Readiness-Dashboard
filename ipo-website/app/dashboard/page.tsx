@@ -219,7 +219,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">Parser Rejection Summary</p>
               <p className="mt-2 text-sm font-semibold text-slate-900">
-                Parser rejected {parserSummary.rejectedTotal} companies below Rs 5 lakh paid-up capital. {parserSummary.passingToAi} companies passed to AI screening.
+                Parser rejected {parserSummary.rejectedTotal} companies before Groq scoring: {parserSummary.rejectedCapital} below Rs 5 lakh paid-up capital, {parserSummary.rejectedCommunityService} community-service profiles, and {parserSummary.rejectedGovernment} government/public-sector profiles. {parserSummary.passingToAi} companies passed to AI screening.
               </p>
             </div>
             {aiProgress.total ? (
@@ -236,12 +236,13 @@ export default function DashboardPage() {
               </div>
             ) : null}
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <div className="mt-4 grid gap-3 sm:grid-cols-5">
             {[
               ["Uploaded", parserSummary.totalUploaded],
               ["Rejected <5L", parserSummary.rejectedCapital],
+              ["Community", parserSummary.rejectedCommunityService],
+              ["Government", parserSummary.rejectedGovernment],
               ["Passed to AI", parserSummary.passingToAi],
-              ["Ignored Filters", "Geo / NIC"],
             ].map(([label, value]) => (
               <div key={label} className="rounded-xl bg-white/55 px-4 py-3">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-700">{label}</p>

@@ -482,7 +482,7 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     setAiScoreReport("");
     setAiCompanyInsights({});
     setUploadStatus(
-      `Parser complete. ${parser.summary.rejectedTotal} rejected, ${parser.summary.passingToAi} passing to AI screening.`,
+      `Parser complete. ${parser.summary.rejectedTotal} rejected (${parser.summary.rejectedCapital} capital, ${parser.summary.rejectedCommunityService} community service, ${parser.summary.rejectedGovernment} government), ${parser.summary.passingToAi} passing to AI screening.`,
     );
     setScoringStatus("Parser complete. Proceeding to AI screening now.");
     await runAiScreening(initialPassing, factorWeights, parser.rejected);

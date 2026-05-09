@@ -281,6 +281,9 @@ ${sourceStatus}
 PUBLIC FEED:
 ${publicFeed}
 
+PARSER PREFILTER:
+This company has already passed parser screening for minimum paid-up capital of Rs 5 lakh and has not been classified by the parser as a community-service, NGO, trust, society, welfare, non-profit, government, municipal, public-sector, authority, or state-owned profile. If public evidence contradicts this, flag the contradiction in status_verification and red_flags/yellow_flags.
+
 TASKS:
 1. Use the public feed as the search evidence for Zauba Corp, Tofler, MCA portal, and sector/thematic reports.
 2. Verify whether the company appears Active, Non-Active, or Unverified. If no source verifies status, apply RF-09 only.
