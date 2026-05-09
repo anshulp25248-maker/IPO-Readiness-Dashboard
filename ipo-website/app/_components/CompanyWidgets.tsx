@@ -14,7 +14,7 @@ export function GlassPanel({
 }) {
   return (
     <section
-      className={`rounded-2xl border border-white/45 bg-white/50 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.14)] backdrop-blur-xl ${className}`}
+      className={`rounded-2xl border border-white/50 bg-white/60 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl ${className}`}
     >
       {children}
     </section>
@@ -36,10 +36,7 @@ export function FactorGrid({ company }: { company: Company }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {Object.entries(company.factors).map(([key, value]) => (
-        <div
-          key={key}
-          className="rounded-xl border border-white/35 bg-white/45 p-4 transition"
-        >
+        <div key={key} className="rounded-xl border border-white/40 bg-white/55 p-4 transition">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-bold text-slate-900">
               {factorLabels[key as keyof typeof factorLabels]}
@@ -84,7 +81,7 @@ export function CompanyTable({ limit, companies }: { limit?: number; companies?:
   const visibleCompanies = sourceCompanies.slice(0, limit ?? sourceCompanies.length);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/40 bg-white/45 backdrop-blur-xl">
+    <div className="overflow-hidden rounded-2xl border border-white/45 bg-white/55 backdrop-blur-xl">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1120px] table-fixed text-left">
           <thead>
@@ -139,12 +136,12 @@ export function CompanyTable({ limit, companies }: { limit?: number; companies?:
                         <div className="grid gap-4 lg:grid-cols-[1fr_0.85fr]">
                           <FactorGrid company={company} />
                           <div className="grid gap-3">
-                            <div className="rounded-xl bg-white/45 p-4">
+                            <div className="rounded-xl bg-white/55 p-4">
                               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-700">IPO Readiness</p>
                               <p className="mt-2 text-lg font-black text-slate-950">{company.ipoReadinessBand || "Pending"}</p>
                               <p className="mt-2 text-sm font-semibold leading-6 text-slate-800">{company.ipoReadinessMessage || company.aiScoringError || "AI scoring is pending."}</p>
                             </div>
-                            <div className="rounded-xl bg-white/45 p-4">
+                            <div className="rounded-xl bg-white/55 p-4">
                               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-700">Flags</p>
                               {[...(company.redFlags ?? []), ...(company.yellowFlags ?? [])].length ? (
                                 <div className="mt-3 grid gap-2">
@@ -163,7 +160,7 @@ export function CompanyTable({ limit, companies }: { limit?: number; companies?:
                                 <p className="mt-3 text-sm font-bold text-slate-800">No flags detected. Clean screening profile.</p>
                               )}
                             </div>
-                            <div className="rounded-xl bg-white/45 p-4">
+                            <div className="rounded-xl bg-white/55 p-4">
                               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-700">Status Verification</p>
                               <p className="mt-2 text-sm font-semibold leading-6 text-slate-800">
                                 {company.statusVerification

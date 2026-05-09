@@ -6,10 +6,10 @@ type PlaceholderPageProps = {
 
 export function PlaceholderPage({ title }: PlaceholderPageProps) {
   return (
-    <main className="min-h-screen bg-[linear-gradient(135deg,#1fb6ff,#34d399,#facc15)] px-6 py-8 text-slate-950">
+    <main className="min-h-screen bg-[linear-gradient(135deg,#7dd3fc,#99f6e4,#dcfce7)] px-6 py-8 text-slate-950">
       <Link
         href="/"
-        className="inline-flex h-11 items-center rounded-lg border border-white/35 bg-white/15 px-5 text-sm font-semibold shadow-lg backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/25"
+        className="inline-flex h-11 items-center rounded-lg border border-white/40 bg-white/25 px-5 text-sm font-semibold shadow-lg backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/35"
       >
         Back
       </Link>

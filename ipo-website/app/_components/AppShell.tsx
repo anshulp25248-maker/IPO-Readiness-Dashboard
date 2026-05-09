@@ -5,13 +5,89 @@ import { useRouter } from "next/navigation";
 import { factorKeys, factorLabels } from "../_data/companies";
 import { useScout } from "./ScoutProvider";
 
+type AppIconName = "dashboard" | "report" | "ranking" | "profile" | "competitors" | "upload" | "weights";
+
 const navItems = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "CDR", href: "/cdr" },
-  { label: "Top Companies", href: "/top-10-companies" },
-  { label: "Director Profile", href: "/director-profile" },
-  { label: "Competitors", href: "/competitors" },
-];
+  { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
+  { label: "CDR", href: "/cdr", icon: "report" },
+  { label: "Top Companies", href: "/top-10-companies", icon: "ranking" },
+  { label: "Director Profile", href: "/director-profile", icon: "profile" },
+  { label: "Competitors", href: "/competitors", icon: "competitors" },
+] as const;
+
+function AppIcon({ name, className = "h-5 w-5" }: { name: AppIconName; className?: string }) {
+  if (name === "dashboard") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M4 13h6V4H4v9Z" />
+        <path d="M14 20h6V4h-6v16Z" />
+        <path d="M4 20h6v-3H4v3Z" />
+      </svg>
+    );
+  }
+
+  if (name === "report") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M7 3h7l4 4v14H7V3Z" />
+        <path d="M14 3v5h5" />
+        <path d="M10 12h6" />
+        <path d="M10 16h4" />
+      </svg>
+    );
+  }
+
+  if (name === "ranking") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M5 20v-6h4v6H5Z" />
+        <path d="M10 20V4h4v16h-4Z" />
+        <path d="M15 20v-9h4v9h-4Z" />
+      </svg>
+    );
+  }
+
+  if (name === "profile") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+        <path d="M4 21a8 8 0 0 1 16 0" />
+      </svg>
+    );
+  }
+
+  if (name === "upload") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M12 16V4" />
+        <path d="M7 9l5-5 5 5" />
+        <path d="M5 20h14" />
+      </svg>
+    );
+  }
+
+  if (name === "weights") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M5 6h14" />
+        <path d="M5 12h14" />
+        <path d="M5 18h14" />
+        <path d="M8 4v4" />
+        <path d="M15 10v4" />
+        <path d="M11 16v4" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+      <path d="M16 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+      <path d="M2 21a6 6 0 0 1 12 0" />
+      <path d="M14 20a5 5 0 0 1 8 0" />
+    </svg>
+  );
+}
 
 function Hamburger() {
   const { setDrawerOpen } = useScout();
@@ -102,7 +178,7 @@ export function Drawer() {
         onClick={() => setDrawerOpen(false)}
       />
       <aside
-        className={`fixed left-0 top-0 z-50 h-full w-[min(92vw,390px)] overflow-y-auto border-r border-white/45 bg-[linear-gradient(135deg,rgba(31,182,255,0.60),rgba(52,211,153,0.60),rgba(250,204,21,0.60))] p-5 shadow-[0_28px_90px_rgba(15,23,42,0.28)] backdrop-blur-2xl transition-transform duration-300 ${
+        className={`fixed left-0 top-0 z-50 h-full w-[min(92vw,390px)] overflow-y-auto border-r border-white/45 bg-[linear-gradient(135deg,rgba(125,211,252,0.78),rgba(153,246,228,0.74),rgba(220,252,231,0.78))] p-5 shadow-[0_28px_90px_rgba(15,23,42,0.24)] backdrop-blur-2xl transition-transform duration-300 ${
           drawerOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -121,7 +197,10 @@ export function Drawer() {
         </div>
 
         <div className="mt-6 rounded-2xl border border-white/45 bg-white/50 p-4 shadow-lg backdrop-blur-xl">
-          <p className="text-sm font-black text-slate-950">Upload Company File</p>
+          <p className="flex items-center gap-2 text-sm font-black text-slate-950">
+            <AppIcon name="upload" className="h-5 w-5" />
+            Upload Company File
+          </p>
           <p className="mt-1 text-xs font-semibold leading-5 text-slate-800/75">
             Upload MCA Excel, CSV, TSV, or JSON company files.
           </p>
@@ -151,7 +230,10 @@ export function Drawer() {
 
         <div className="mt-5 rounded-2xl border border-white/45 bg-white/50 p-4 shadow-lg backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-black text-slate-950">V2 Factor Weights</p>
+            <p className="flex items-center gap-2 text-sm font-black text-slate-950">
+              <AppIcon name="weights" className="h-5 w-5" />
+              V2 Factor Weights
+            </p>
             <span
               className={`rounded-full px-3 py-1 text-xs font-black ${
                 Math.abs(pendingWeightTotal - 100) < 0.001 ? "bg-slate-950 text-white" : "bg-rose-100 text-rose-950"
@@ -237,8 +319,9 @@ export function Drawer() {
               key={item.href}
               href={item.href}
               onClick={() => setDrawerOpen(false)}
-              className="rounded-xl px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-white/65"
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-white/65"
             >
+              <AppIcon name={item.icon} className="h-5 w-5" />
               {item.label}
             </Link>
           ))}
@@ -259,7 +342,7 @@ export function AppShell({ title, eyebrow = "Smart Scouter", children }: AppShel
   const scoringOverlayOpen = aiProgress.running && aiProgress.total > 0;
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(135deg,rgba(31,182,255,0.60),rgba(52,211,153,0.60),rgba(250,204,21,0.60))] px-4 py-5 text-slate-950 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[linear-gradient(135deg,rgba(125,211,252,0.76),rgba(153,246,228,0.72),rgba(220,252,231,0.76))] px-4 py-5 text-slate-950 sm:px-6 lg:px-8">
       <div
         className={`min-h-screen transition duration-300 ${
           scoringOverlayOpen ? "pointer-events-none select-none blur-md" : ""
@@ -283,8 +366,9 @@ export function AppShell({ title, eyebrow = "Smart Scouter", children }: AppShel
               <Link
                 key={item.href}
                 href={item.href}
-                className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white/65"
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white/65"
               >
+                <AppIcon name={item.icon} className="h-4 w-4" />
                 {item.label}
               </Link>
             ))}

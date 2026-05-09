@@ -5,6 +5,93 @@ import { FactorGrid, GlassPanel, ScoreBadge, CompanyTable } from "../_components
 import { ReportViewer } from "../_components/ReportViewer";
 import { useScout } from "../_components/ScoutProvider";
 
+type DashboardIconName = "building" | "sector" | "location" | "capital" | "eligible" | "score" | "weights" | "filing";
+
+function DashboardIcon({ name }: { name: DashboardIconName }) {
+  const className = "h-5 w-5 text-slate-950";
+
+  if (name === "building") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M6 21V4h12v17" />
+        <path d="M9 8h2" />
+        <path d="M13 8h2" />
+        <path d="M9 12h2" />
+        <path d="M13 12h2" />
+        <path d="M10 21v-5h4v5" />
+      </svg>
+    );
+  }
+
+  if (name === "sector") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M4 19V9l5 4V9l5 4V7h6v12H4Z" />
+      </svg>
+    );
+  }
+
+  if (name === "location") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M12 21s7-5.4 7-12a7 7 0 1 0-14 0c0 6.6 7 12 7 12Z" />
+        <path d="M12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+      </svg>
+    );
+  }
+
+  if (name === "capital") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M4 8h16" />
+        <path d="M6 8V6h12v2" />
+        <path d="M7 8v11" />
+        <path d="M17 8v11" />
+        <path d="M4 19h16" />
+      </svg>
+    );
+  }
+
+  if (name === "eligible") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M20 6 9 17l-5-5" />
+      </svg>
+    );
+  }
+
+  if (name === "score") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M4 14a8 8 0 1 1 16 0" />
+        <path d="m12 14 4-4" />
+        <path d="M8 20h8" />
+      </svg>
+    );
+  }
+
+  if (name === "weights") {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M5 6h14" />
+        <path d="M5 12h14" />
+        <path d="M5 18h14" />
+        <path d="M8 4v4" />
+        <path d="M15 10v4" />
+        <path d="M11 16v4" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path d="M7 3h7l4 4v14H7V3Z" />
+      <path d="M14 3v5h5" />
+      <path d="M10 13h6" />
+    </svg>
+  );
+}
+
 export default function DashboardPage() {
   const {
     rankedCompanies,
@@ -41,13 +128,16 @@ export default function DashboardPage() {
 
           <div className="mt-7 grid gap-3 sm:grid-cols-4">
             {[
-              ["CIN", topCompany.cin],
-              ["Sector", topCompany.sector],
-              ["Location", `${topCompany.city}, ${topCompany.state}`],
-              ["Paid-up", topCompany.paidUpCapital],
-            ].map(([label, value]) => (
-              <div key={label} className="min-w-0 overflow-hidden rounded-xl border border-white/40 bg-white/45 p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-800/65">{label}</p>
+              ["CIN", topCompany.cin, "building"],
+              ["Sector", topCompany.sector, "sector"],
+              ["Location", `${topCompany.city}, ${topCompany.state}`, "location"],
+              ["Paid-up", topCompany.paidUpCapital, "capital"],
+            ].map(([label, value, icon]) => (
+              <div key={label} className="min-w-0 overflow-hidden rounded-xl border border-white/45 bg-white/55 p-4">
+                <div className="flex items-center gap-2">
+                  <DashboardIcon name={icon as DashboardIconName} />
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-800/65">{label}</p>
+                </div>
                 <p className="mt-2 break-words text-sm font-bold leading-6 text-slate-950">{value}</p>
               </div>
             ))}
@@ -63,13 +153,16 @@ export default function DashboardPage() {
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">Portfolio Pulse</p>
             <div className="mt-5 grid gap-3">
               {[
-                ["Eligible Companies", eligibleCount.toString()],
-                ["Prime Score", `${scoreCompany(topCompany)}/100`],
-                ["Weighted Factors", `${includedFactorCount} / 7`],
-                ["Latest Filing", topCompany.lastFiling],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between rounded-xl bg-white/45 px-4 py-3">
-                  <span className="text-sm font-semibold text-slate-800">{label}</span>
+                ["Eligible Companies", eligibleCount.toString(), "eligible"],
+                ["Prime Score", `${scoreCompany(topCompany)}/100`, "score"],
+                ["Weighted Factors", `${includedFactorCount} / 7`, "weights"],
+                ["Latest Filing", topCompany.lastFiling, "filing"],
+              ].map(([label, value, icon]) => (
+                <div key={label} className="flex items-center justify-between gap-3 rounded-xl bg-white/55 px-4 py-3">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                    <DashboardIcon name={icon as DashboardIconName} />
+                    {label}
+                  </span>
                   <span className="font-bold text-slate-950">{value}</span>
                 </div>
               ))}
@@ -90,7 +183,7 @@ export default function DashboardPage() {
                 </span>
               ) : null}
             </div>
-            <p className="mt-4 rounded-xl bg-white/45 px-4 py-3 text-sm font-semibold leading-6 text-slate-900">
+            <p className="mt-4 rounded-xl bg-white/55 px-4 py-3 text-sm font-semibold leading-6 text-slate-900">
               {topCompany.ipoReadinessMessage || topInsight?.rationale || aiScoreReport || scoringStatus || "Upload a file to run parser and AI screening."}
             </p>
             {topInsight?.redFlags?.length ? (
@@ -150,7 +243,7 @@ export default function DashboardPage() {
               ["Passed to AI", parserSummary.passingToAi],
               ["Ignored Filters", "Geo / NIC"],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-xl bg-white/45 px-4 py-3">
+              <div key={label} className="rounded-xl bg-white/55 px-4 py-3">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-700">{label}</p>
                 <p className="mt-1 text-2xl font-black text-slate-950">{value}</p>
               </div>

@@ -7,7 +7,7 @@ type FeatureCardProps = {
 };
 
 function FeatureIcon({ icon }: { icon: FeatureCardProps["icon"] }) {
-  const iconClass = "h-10 w-10 sm:h-12 sm:w-12";
+  const iconClass = "h-10 w-10 sm:h-12 sm:w-12 lg:h-16 lg:w-16";
 
   if (icon === "dashboard") {
     return (
@@ -63,7 +63,7 @@ export function FeatureCard({ title, href, icon }: FeatureCardProps) {
   return (
     <Link
       href={href}
-      className="group flex min-h-28 w-full flex-col items-center justify-center gap-3 rounded-2xl border border-white/35 bg-white/15 px-5 py-6 text-center text-slate-950 shadow-[0_20px_60px_rgba(15,23,42,0.18)] backdrop-blur-xl transition duration-300 ease-out hover:-translate-y-1 hover:scale-[1.025] hover:border-white/70 hover:text-indigo-950 hover:shadow-[0_24px_80px_rgba(30,64,175,0.28)] focus:outline-none focus:ring-4 focus:ring-white/45 sm:min-h-36 sm:gap-4 sm:px-6 sm:py-8"
+      className="group flex min-h-28 w-full flex-col items-center justify-center gap-3 rounded-2xl border border-white/40 bg-white/25 px-5 py-6 text-center text-slate-950 shadow-[0_20px_60px_rgba(15,23,42,0.16)] backdrop-blur-xl transition duration-300 ease-out hover:-translate-y-1 hover:scale-[1.025] hover:border-white/75 hover:bg-white/35 hover:text-indigo-950 hover:shadow-[0_24px_80px_rgba(30,64,175,0.24)] focus:outline-none focus:ring-4 focus:ring-white/45 sm:min-h-36 sm:gap-4 sm:px-6 sm:py-8 lg:min-h-44"
     >
       <FeatureIcon icon={icon} />
       <span className="text-xl font-bold tracking-wide transition duration-300 sm:text-2xl">{title}</span>

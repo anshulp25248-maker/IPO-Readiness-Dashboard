@@ -36,13 +36,13 @@ function HamburgerButton() {
 
 export default function SmartScouterHome() {
   return (
-    <main className="relative flex min-h-screen overflow-x-hidden bg-[linear-gradient(135deg,rgba(31,182,255,0.60),rgba(52,211,153,0.60),rgba(250,204,21,0.60))] px-4 py-8 text-slate-950 sm:px-8 sm:py-10">
+    <main className="relative flex min-h-screen overflow-x-hidden bg-[linear-gradient(135deg,rgba(125,211,252,0.76),rgba(153,246,228,0.72),rgba(220,252,231,0.76))] px-4 py-8 text-slate-950 sm:px-8 sm:py-10">
       <Drawer />
       <HamburgerButton />
 
-      <section className="mx-auto flex w-full max-w-6xl animate-page-enter flex-col items-center justify-center gap-8 pt-16 sm:gap-12 sm:pt-0">
+      <section className="mx-auto flex w-full max-w-6xl animate-page-enter flex-col items-center justify-start gap-8 pt-24 sm:gap-12 sm:pt-20 lg:pt-14">
         <header className="space-y-4 text-center sm:space-y-5">
-          <h1 className="bg-gradient-to-r from-slate-950 via-indigo-950 to-purple-900 bg-clip-text font-serif text-4xl font-bold tracking-normal text-transparent sm:text-6xl lg:text-7xl">
+          <h1 className="bg-gradient-to-r from-slate-950 via-indigo-950 to-purple-900 bg-clip-text font-serif text-5xl font-bold tracking-normal text-transparent sm:text-7xl lg:text-8xl">
             Smart Scouter
           </h1>
           <p className="text-base font-medium text-slate-800/80 sm:text-xl">
