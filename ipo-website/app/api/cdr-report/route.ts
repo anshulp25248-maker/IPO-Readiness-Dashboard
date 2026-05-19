@@ -34,27 +34,27 @@ const cdrTaskConfig: Record<ReportType, { label: string; envPrefix: string; maxT
   "sector-analysis": {
     label: "Sector Analysis",
     envPrefix: "CDR_SECTOR_ANALYSIS",
-    maxTokens: 2600,
+    maxTokens: 1300,
   },
   "industry-analysis": {
     label: "Industry Analysis",
     envPrefix: "CDR_INDUSTRY_ANALYSIS",
-    maxTokens: 2300,
+    maxTokens: 1200,
   },
   "competitor-analysis": {
     label: "Competitor Analysis",
     envPrefix: "CDR_COMPETITOR_ANALYSIS",
-    maxTokens: 2700,
+    maxTokens: 1400,
   },
   "director-profile": {
     label: "Director Profile",
     envPrefix: "CDR_DIRECTOR_PROFILE",
-    maxTokens: 2700,
+    maxTokens: 1400,
   },
   "company-analysis": {
     label: "Company Analysis",
     envPrefix: "CDR_COMPANY_ANALYSIS",
-    maxTokens: 2400,
+    maxTokens: 1300,
   },
   "comprehensive-cdr": {
     label: "Comprehensive CDR",
@@ -82,7 +82,7 @@ async function tavilySearch(query: string, type: ReportType) {
       search_depth: "advanced",
       include_answer: false,
       include_raw_content: false,
-      max_results: 8,
+      max_results: 4,
     }),
     cache: "no-store",
   });
@@ -103,14 +103,14 @@ async function tavilySearchMany(queries: string[], type: ReportType) {
       seen.add(key);
       return true;
     })
-    .slice(0, 18);
+    .slice(0, 8);
 }
 
 function sourceContext(results: SearchResult[]) {
   if (!results.length) return "No live feed results returned.";
   return results
     .map((item, index) =>
-      [`${index + 1}. ${item.title || "Untitled"}`, `URL: ${item.url || "NA"}`, `Snippet: ${(item.content || "").slice(0, 700)}`].join("\n"),
+      [`${index + 1}. ${item.title || "Untitled"}`, `URL: ${item.url || "NA"}`, `Snippet: ${(item.content || "").slice(0, 320)}`].join("\n"),
     )
     .join("\n\n");
 }
@@ -264,10 +264,25 @@ function buildSectionPrompt(
   internalInfo: string | undefined,
   selectedReportType: ReportType,
   results: SearchResult[],
+  compact = false,
 ) {
-  return `You are a senior investment analyst specializing in unlisted/private companies in India. Research ${company.name} (CIN if known: ${company.cin}) and produce the requested CDR tab only. Do not hallucinate or assume any data. Every factual data point must come from uploaded MCA/feed-parser data or the live feed below. If data is unavailable, explicitly state "Data Not Available" for that field.
-
-SOURCES TO SEARCH AND USE, IN ORDER:
+  const sourceTruth = compact
+    ? {
+        name: company.name,
+        cin: company.cin,
+        sector: company.sector,
+        nicCode: company.nicCode,
+        activity: company.activity,
+        paidUpCapital: company.paidUpCapital,
+        authorizedCapital: company.authorizedCapital,
+        director: company.director,
+        score,
+        factors: company.factors,
+      }
+    : companyTruth(company, score);
+  const sourceList = compact
+    ? "Use uploaded parser data, MCA, Zauba, Tofler, Google-indexed public snippets, company websites, credible news, public LinkedIn snippets, and sector/government sources."
+    : `SOURCES TO SEARCH AND USE, IN ORDER:
 1. MCA21 Portal (mca.gov.in) for incorporation data, directors, charges, filings
 2. Zauba Corp / Tofler / Veratech for company profile and public financial snippets
 3. Google-indexed public snippets and company website pages
@@ -276,10 +291,14 @@ SOURCES TO SEARCH AND USE, IN ORDER:
 6. IBEF / FICCI / Industry Association Reports for sector outlook
 7. Business news sources for recent developments
 8. LinkedIn public snippets for business model and management background
-9. Court records / MCA charge search for litigation and charges
+9. Court records / MCA charge search for litigation and charges`;
+
+  return `You are a senior investment analyst specializing in unlisted/private companies in India. Research ${company.name} (CIN if known: ${company.cin}) and produce the requested CDR tab only. Do not hallucinate or assume any data. Every factual data point must come from uploaded MCA/feed-parser data or the live feed below. If data is unavailable, explicitly state "Data Not Available" for that field.
+
+${sourceList}
 
 SOURCE OF TRUTH FROM UPLOADED EXCEL/MCA PARSER
-${JSON.stringify(companyTruth(company, score), null, 2)}
+${JSON.stringify(sourceTruth, null, compact ? 0 : 2)}
 
 STRICT CONSISTENCY RULE
 The uploaded Excel/MCA parser values above are the source of truth for CIN, legal name, paid-up capital, authorized capital, sector/NIC/activity, filing date, uploaded director fields, factor scores, and deterministic Scout Score. Do not replace paid-up capital, authorized capital, CIN, or score with a public-source value. If Zauba, Tofler, MCA, or another source appears to conflict, state the discrepancy in a paragraph titled "Public-Source Discrepancy" and recommend manual verification.
@@ -288,7 +307,7 @@ OPTIONAL INTERNAL INFORMATION FROM USER
 ${internalInfo?.trim() || "NA"}
 
 LIVE FEED
-${sourceContext(results)}
+${sourceContext(compact ? results.slice(0, 5) : results)}
 
 REQUESTED REPORT TYPE
 ${selectedReportType}
@@ -319,16 +338,31 @@ async function generateCdrSection(
 ) {
   const taskConfig = cdrTaskConfig[selectedReportType];
   const results = await tavilySearchMany(searchQueries(company, selectedReportType), selectedReportType);
-  const ai = await generateAiText({
-    task: "cdr",
-    provider: "groq",
+  const baseOptions = {
+    task: "cdr" as const,
+    provider: "groq" as const,
     apiKey: cdrEnvValue(selectedReportType, "GROQ_API_KEY"),
     providerLabel: `Groq ${taskConfig.label}`,
     system: "You are Scout Smarter, an investment banking analyst preparing detailed CDR sections from uploaded parser data and live Tavily evidence. Be source-aware, skeptical, and never hallucinate.",
-    prompt: buildSectionPrompt(company, score, internalInfo, selectedReportType, results),
     temperature: 0.12,
-    maxTokens: taskConfig.maxTokens,
-  });
+  };
+  let ai;
+
+  try {
+    ai = await generateAiText({
+      ...baseOptions,
+      prompt: buildSectionPrompt(company, score, internalInfo, selectedReportType, results),
+      maxTokens: taskConfig.maxTokens,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!/413|Request too large|TPM|tokens per minute/i.test(message)) throw error;
+    ai = await generateAiText({
+      ...baseOptions,
+      prompt: buildSectionPrompt(company, score, internalInfo, selectedReportType, results, true),
+      maxTokens: 800,
+    });
+  }
 
   return {
     reportType: selectedReportType,

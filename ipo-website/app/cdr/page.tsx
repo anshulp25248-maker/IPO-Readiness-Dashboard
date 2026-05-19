@@ -192,10 +192,11 @@ export default function CdrPage() {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
+      const detail = message && !message.includes("CDR generation failed") ? ` Details: ${message.slice(0, 180)}` : "";
       setStatus(
         message.includes("429")
           ? "AI report generation is temporarily rate-limited. Please retry after a short while."
-          : `${activeSpec.label} could not be completed. Please retry with the same company.`,
+          : `${activeSpec.label} could not be completed. Please retry with the same company.${detail}`,
       );
     } finally {
       setIsGenerating(false);
