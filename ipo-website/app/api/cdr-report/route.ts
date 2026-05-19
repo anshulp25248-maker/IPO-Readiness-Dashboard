@@ -115,6 +115,30 @@ function sourceContext(results: SearchResult[]) {
     .join("\n\n");
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryDelayMs(message: string) {
+  const match = message.match(/try again in\s+([0-9.]+)s/i);
+  const seconds = match ? Number(match[1]) : 8;
+  return Math.max(3000, Math.min(15000, Math.ceil((Number.isFinite(seconds) ? seconds : 8) * 1000) + 1000));
+}
+
+async function generateAiTextWithRetry(options: Parameters<typeof generateAiText>[0], retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await generateAiText(options);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (attempt >= retries || !/429|rate limit|try again/i.test(message)) throw error;
+      await sleep(retryDelayMs(message));
+    }
+  }
+
+  return generateAiText(options);
+}
+
 function companyTruth(company: Company, score: number | undefined) {
   return {
     name: company.name,
@@ -352,7 +376,7 @@ async function generateCdrHeading(
   },
 ) {
   try {
-    const ai = await generateAiText({
+    const ai = await generateAiTextWithRetry({
       ...baseOptions,
       prompt: buildHeadingPrompt(company, score, internalInfo, selectedReportType, heading, results),
       maxTokens: 650,
@@ -361,7 +385,7 @@ async function generateCdrHeading(
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (!/413|Request too large|TPM|tokens per minute/i.test(message)) throw error;
-    const ai = await generateAiText({
+    const ai = await generateAiTextWithRetry({
       ...baseOptions,
       prompt: buildHeadingPrompt(company, score, internalInfo, selectedReportType, heading, results.slice(0, 3), true),
       maxTokens: 450,
@@ -420,7 +444,7 @@ async function generateComprehensiveCdr(company: Company, score: number | undefi
     .map((section) => `SECTION: ${section.label}\n${section.report.slice(0, 1200)}`)
     .join("\n\n");
   const taskConfig = cdrTaskConfig["comprehensive-cdr"];
-  const finalAi = await generateAiText({
+  const finalAi = await generateAiTextWithRetry({
     task: "cdr",
     provider: "groq",
     apiKey: cdrEnvValue("comprehensive-cdr", "GROQ_API_KEY"),
