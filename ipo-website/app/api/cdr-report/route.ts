@@ -202,7 +202,7 @@ function searchQueries(company: Company, type: ReportType) {
   return [...common, ...byType[type]].filter(Boolean);
 }
 
-function reportStructure(type: ReportType) {
+function reportHeadings(type: ReportType) {
   const structures: Record<ReportType, string[]> = {
     "sector-analysis": [
       "Sector Definition",
@@ -255,14 +255,15 @@ function reportStructure(type: ReportType) {
     ],
   };
 
-  return structures[type].map((heading) => `**${heading}**`).join("\n");
+  return structures[type];
 }
 
-function buildSectionPrompt(
+function buildHeadingPrompt(
   company: Company,
   score: number | undefined,
   internalInfo: string | undefined,
   selectedReportType: ReportType,
+  heading: string,
   results: SearchResult[],
   compact = false,
 ) {
@@ -293,7 +294,7 @@ function buildSectionPrompt(
 8. LinkedIn public snippets for business model and management background
 9. Court records / MCA charge search for litigation and charges`;
 
-  return `You are a senior investment analyst specializing in unlisted/private companies in India. Research ${company.name} (CIN if known: ${company.cin}) and produce the requested CDR tab only. Do not hallucinate or assume any data. Every factual data point must come from uploaded MCA/feed-parser data or the live feed below. If data is unavailable, explicitly state "Data Not Available" for that field.
+  return `You are a senior investment analyst specializing in unlisted/private companies in India. Research ${company.name} (CIN if known: ${company.cin}) and produce only one detailed subsection for the requested CDR tab. Do not hallucinate or assume any data. Every factual data point must come from uploaded MCA/feed-parser data or the live feed below. If data is unavailable, explicitly state "Data Not Available" for that field.
 
 ${sourceList}
 
@@ -312,22 +313,61 @@ ${sourceContext(compact ? results.slice(0, 5) : results)}
 REQUESTED REPORT TYPE
 ${selectedReportType}
 
+REQUESTED SUBSECTION
+${heading}
+
 REPORT INSTRUCTIONS
 ${reportInstructions(selectedReportType)}
 
 OUTPUT STRUCTURE
-Use exactly these bold headings, each on its own line:
-${reportStructure(selectedReportType)}
+Use exactly this bold heading, on its own line:
+**${heading}**
 
 FINAL INSTRUCTIONS:
 - Do not invent any number, name, director, DIN, date, filing, or fact.
 - If a section has no data available from public sources, write: "Data Not Available - recommend requesting directly from company".
 - Cite the source platform for every major data point.
 - Keep the tone objective, like a SEBI-registered research analyst.
-- Keep every heading short. Put detail in the body under the heading.
+- Keep the heading short. Put detail in the body under the heading.
+- Write 2 detailed analyst paragraphs where evidence exists. If evidence is thin, write 1 detailed paragraph explaining the limitation and what diligence should be requested.
 - Maintain uploaded paid-up capital and authorized capital exactly as shown in the source-of-truth block.
 - Assess business-model uniqueness using uploaded NIC/activity data plus live public evidence; if public evidence is thin, say so and keep the conclusion conservative.
-- The final report should help a reader decide whether to invest, lend to, partner with, reject, or request more diligence.`;
+- This subsection will be stitched with the other CDR subsections, so do not repeat unrelated headings.`;
+}
+
+async function generateCdrHeading(
+  company: Company,
+  score: number | undefined,
+  internalInfo: string | undefined,
+  selectedReportType: ReportType,
+  heading: string,
+  results: SearchResult[],
+  baseOptions: {
+    task: "cdr";
+    provider: "groq";
+    apiKey: string;
+    providerLabel: string;
+    system: string;
+    temperature: number;
+  },
+) {
+  try {
+    const ai = await generateAiText({
+      ...baseOptions,
+      prompt: buildHeadingPrompt(company, score, internalInfo, selectedReportType, heading, results),
+      maxTokens: 650,
+    });
+    return ai.text || `**${heading}**\nData Not Available - no subsection returned.`;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!/413|Request too large|TPM|tokens per minute/i.test(message)) throw error;
+    const ai = await generateAiText({
+      ...baseOptions,
+      prompt: buildHeadingPrompt(company, score, internalInfo, selectedReportType, heading, results.slice(0, 3), true),
+      maxTokens: 450,
+    });
+    return ai.text || `**${heading}**\nData Not Available - no subsection returned.`;
+  }
 }
 
 async function generateCdrSection(
@@ -346,31 +386,19 @@ async function generateCdrSection(
     system: "You are Scout Smarter, an investment banking analyst preparing detailed CDR sections from uploaded parser data and live Tavily evidence. Be source-aware, skeptical, and never hallucinate.",
     temperature: 0.12,
   };
-  let ai;
+  const parts = [];
 
-  try {
-    ai = await generateAiText({
-      ...baseOptions,
-      prompt: buildSectionPrompt(company, score, internalInfo, selectedReportType, results),
-      maxTokens: taskConfig.maxTokens,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    if (!/413|Request too large|TPM|tokens per minute/i.test(message)) throw error;
-    ai = await generateAiText({
-      ...baseOptions,
-      prompt: buildSectionPrompt(company, score, internalInfo, selectedReportType, results, true),
-      maxTokens: 800,
-    });
+  for (const heading of reportHeadings(selectedReportType)) {
+    parts.push(await generateCdrHeading(company, score, internalInfo, selectedReportType, heading, results, baseOptions));
   }
 
   return {
     reportType: selectedReportType,
     label: taskConfig.label,
-    report: ai.text || `**${taskConfig.label}**\nData Not Available - no CDR report returned.`,
+    report: parts.join("\n\n") || `**${taskConfig.label}**\nData Not Available - no CDR report returned.`,
     sources: results.map((item) => ({ title: item.title, url: item.url })),
-    provider: ai.provider,
-    model: ai.model,
+    provider: baseOptions.providerLabel,
+    model: envValue("GROQ_MODEL_CDR") || envValue("GROQ_MODEL") || "llama-3.1-8b-instant",
   };
 }
 
@@ -389,7 +417,7 @@ async function generateComprehensiveCdr(company: Company, score: number | undefi
     comprehensiveSectionTypes.map((type) => generateCdrSection(company, score, internalInfo, type)),
   );
   const sectionDigest = sectionResults
-    .map((section) => `SECTION: ${section.label}\n${section.report.slice(0, 4500)}`)
+    .map((section) => `SECTION: ${section.label}\n${section.report.slice(0, 1200)}`)
     .join("\n\n");
   const taskConfig = cdrTaskConfig["comprehensive-cdr"];
   const finalAi = await generateAiText({
