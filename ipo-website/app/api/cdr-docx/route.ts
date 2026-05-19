@@ -28,6 +28,7 @@ function isHeading(rawLine: string) {
   if (!line) return false;
   return (
     /^#{1,6}\s*/.test(rawLine) ||
+    /^\*\*[^*\n]{2,90}\*\*\s*$/.test(rawLine.trim()) ||
     /^(section\s+)?\d+\s*[-.:]/i.test(rawLine.trim()) ||
     (line.endsWith(":") && line.length <= 90) ||
     (line === line.toUpperCase() && line.split(/\s+/).length <= 12)
@@ -44,14 +45,14 @@ function textColor(line: string) {
 function headingParagraph(text: string, level: typeof HeadingLevel.HEADING_1 | typeof HeadingLevel.HEADING_2) {
   return new Paragraph({
     heading: level,
-    spacing: { before: 260, after: 160 },
+    spacing: { before: 220, after: 100 },
     children: [
       new TextRun({
-        text: cleanLine(text).toUpperCase(),
+        text: cleanLine(text),
         bold: true,
         color: "091F4A",
         font: "Arial",
-        size: level === HeadingLevel.HEADING_1 ? 30 : 25,
+        size: level === HeadingLevel.HEADING_1 ? 23 : 21,
       }),
     ],
   });
@@ -67,7 +68,7 @@ function bodyParagraph(text: string) {
         text: cleaned,
         color: textColor(cleaned),
         font: "Arial",
-        size: 21,
+        size: 19,
         bold: textColor(cleaned) !== "111827",
       }),
     ],

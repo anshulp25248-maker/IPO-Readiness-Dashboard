@@ -101,8 +101,6 @@ export default function DashboardPage() {
     aiScoreReport,
     aiCompanyInsights,
     scoringStatus,
-    parserSummary,
-    aiProgress,
   } = useScout();
   const eligibleCount = rankedCompanies.filter((company) => company.status === "Active").length;
   const topInsight = aiCompanyInsights[topCompany.id];
@@ -213,48 +211,19 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {parserSummary ? (
-        <GlassPanel className="mt-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">Parser Rejection Summary</p>
-              <p className="mt-2 text-sm font-semibold text-slate-900">
-                Parser rejected {parserSummary.rejectedTotal} companies before Groq scoring: {parserSummary.rejectedCapital} below Rs 5 lakh paid-up capital, {parserSummary.rejectedCommunityService} community-service profiles, and {parserSummary.rejectedGovernment} government/public-sector profiles. {parserSummary.passingToAi} companies passed to AI screening.
-              </p>
-            </div>
-            {aiProgress.total ? (
-              <div className="min-w-[260px]">
-                <div className="h-3 overflow-hidden rounded-full bg-white/40">
-                  <div
-                    className="h-full rounded-full bg-slate-950"
-                    style={{ width: `${Math.round((aiProgress.completed / aiProgress.total) * 100)}%` }}
-                  />
-                </div>
-                <p className="mt-2 text-xs font-black text-slate-950">
-                  AI screening {aiProgress.completed} of {aiProgress.total} companies
-                </p>
-              </div>
-            ) : null}
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-5">
-            {[
-              ["Uploaded", parserSummary.totalUploaded],
-              ["Rejected <5L", parserSummary.rejectedCapital],
-              ["Community", parserSummary.rejectedCommunityService],
-              ["Government", parserSummary.rejectedGovernment],
-              ["Passed to AI", parserSummary.passingToAi],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-xl bg-white/55 px-4 py-3">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-700">{label}</p>
-                <p className="mt-1 text-2xl font-black text-slate-950">{value}</p>
-              </div>
-            ))}
-          </div>
-        </GlassPanel>
-      ) : null}
-
       <div className="mt-5">
         <CompanyTable limit={5} />
+      </div>
+
+      <div className="mt-6 flex justify-center">
+        <div className="w-full max-w-3xl rounded-2xl border border-white/45 bg-white/45 px-6 py-5 text-center shadow-[0_18px_50px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+          <p className="font-serif text-3xl font-black tracking-normal text-slate-950 sm:text-4xl">
+            GreenFlow Ventures Ltd.
+          </p>
+          <p className="mt-2 text-xs font-black uppercase tracking-[0.24em] text-slate-800/70">
+            Smart Scouter Investment Console
+          </p>
+        </div>
       </div>
 
       {aiScoreReport ? (

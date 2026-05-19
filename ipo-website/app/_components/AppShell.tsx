@@ -108,54 +108,12 @@ function Hamburger() {
   );
 }
 
-function ScoringOverlay({ completed, total }: { completed: number; total: number }) {
-  const progress = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
-  const circumference = 2 * Math.PI * 48;
-  const offset = circumference - (progress / 100) * circumference;
-
-  return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/20 backdrop-blur-[2px]"
-      role="status"
-      aria-live="polite"
-      aria-label={`AI scoring ${progress}% complete`}
-    >
-      <div className="relative flex h-44 w-44 items-center justify-center rounded-full border border-white/45 bg-white/70 shadow-[0_28px_90px_rgba(15,23,42,0.28)] backdrop-blur-2xl">
-        <svg className="absolute inset-0 h-full w-full -rotate-90 p-4" viewBox="0 0 120 120" aria-hidden="true">
-          <circle
-            cx="60"
-            cy="60"
-            r="48"
-            fill="none"
-            stroke="rgba(255,255,255,0.76)"
-            strokeWidth="10"
-          />
-          <circle
-            cx="60"
-            cy="60"
-            r="48"
-            fill="none"
-            stroke="rgb(15,23,42)"
-            strokeLinecap="round"
-            strokeWidth="10"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            className="transition-all duration-300"
-          />
-        </svg>
-        <span className="absolute inset-4 animate-spin rounded-full border-2 border-transparent border-t-emerald-600" />
-        <span className="font-mono text-4xl font-black text-slate-950">{progress}%</span>
-      </div>
-    </div>
-  );
-}
-
 export function Drawer() {
   const router = useRouter();
   const {
     drawerOpen,
     setDrawerOpen,
-    pendingFactorWeights,
+    pendingFactorMarks,
     setPendingFactorWeight,
     runScoring,
     handleUpload,
@@ -165,9 +123,8 @@ export function Drawer() {
     companies,
     aiProgress,
   } = useScout();
-  const pendingWeightTotal = factorKeys.reduce((sum, key) => sum + (pendingFactorWeights[key] ?? 0), 0);
-  const remainingWeight = Math.max(0, 100 - pendingWeightTotal);
-  const weightsAreReady = Math.abs(pendingWeightTotal - 100) < 0.001;
+  const selectedFactorCount = factorKeys.filter((key) => (pendingFactorMarks[key] ?? 0) > 0).length;
+  const marksAreReady = selectedFactorCount > 0;
 
   return (
     <>
@@ -232,24 +189,19 @@ export function Drawer() {
           <div className="flex items-center justify-between gap-3">
             <p className="flex items-center gap-2 text-sm font-black text-slate-950">
               <AppIcon name="weights" className="h-5 w-5" />
-              V2 Factor Weights
+              V2 Factor Marks
             </p>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-black ${
-                Math.abs(pendingWeightTotal - 100) < 0.001 ? "bg-slate-950 text-white" : "bg-rose-100 text-rose-950"
-              }`}
-            >
-              {pendingWeightTotal}%
+            <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+              /10
             </span>
           </div>
           <p className="mt-1 text-xs font-semibold text-slate-800/75">
-            Each factor can be 0% to 30%. Total is capped at 100%.
+            Mark each factor from 0 to 10. 0 removes the factor; scoring is normalized to 100 automatically.
           </p>
           <div className="mt-4 grid gap-3">
             {factorKeys.map((key) => {
-              const value = pendingFactorWeights[key] ?? 0;
-              const maxForSlider = Math.min(30, value + remainingWeight);
-              const fill = maxForSlider > 0 ? Math.round((value / maxForSlider) * 100) : 0;
+              const value = pendingFactorMarks[key] ?? 0;
+              const fill = value * 10;
 
               return (
                 <label
@@ -259,13 +211,13 @@ export function Drawer() {
                   <span className="flex items-center justify-between gap-3">
                     <span className="text-sm font-bold text-slate-950">{factorLabels[key]}</span>
                     <span className="rounded-full bg-slate-950 px-3 py-1 font-mono text-sm font-black text-white">
-                      {value}%
+                      {value}/10
                     </span>
                   </span>
                   <input
                     type="range"
                     min="0"
-                    max={maxForSlider}
+                    max="10"
                     step="1"
                     value={value}
                     onChange={(event) => setPendingFactorWeight(key, Number(event.target.value))}
@@ -275,19 +227,19 @@ export function Drawer() {
                     }}
                   />
                   <span className="mt-2 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.12em] text-slate-800/65">
-                    <span>0%</span>
-                    <span>Max {Math.round(maxForSlider)}%</span>
+                    <span>0</span>
+                    <span>10</span>
                   </span>
                 </label>
               );
             })}
           </div>
           <p className="mt-3 text-xs font-black text-slate-950">
-            {weightsAreReady ? "Total 100% matched" : `${remainingWeight}% left to match 100%`}
+            {marksAreReady ? `${selectedFactorCount} factors selected. Final score is calculated out of 100.` : "Select at least one factor to score."}
           </p>
           <button
             type="button"
-            disabled={!weightsAreReady || aiProgress.running}
+            disabled={!marksAreReady || aiProgress.running}
             onClick={() => {
               setDrawerOpen(false);
               router.push("/dashboard");
@@ -338,16 +290,9 @@ type AppShellProps = {
 };
 
 export function AppShell({ title, eyebrow = "Smart Scouter", children }: AppShellProps) {
-  const { aiProgress } = useScout();
-  const scoringOverlayOpen = aiProgress.running && aiProgress.total > 0;
-
   return (
     <main className="min-h-screen bg-[linear-gradient(135deg,rgba(125,211,252,0.76),rgba(153,246,228,0.72),rgba(220,252,231,0.76))] px-4 py-5 text-slate-950 sm:px-6 lg:px-8">
-      <div
-        className={`min-h-screen transition duration-300 ${
-          scoringOverlayOpen ? "pointer-events-none select-none blur-md" : ""
-        }`}
-      >
+      <div className="min-h-screen transition duration-300">
         <Drawer />
         <header className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -377,9 +322,6 @@ export function AppShell({ title, eyebrow = "Smart Scouter", children }: AppShel
 
         <section className="mx-auto mt-7 max-w-7xl animate-page-enter">{children}</section>
       </div>
-      {scoringOverlayOpen ? (
-        <ScoringOverlay completed={aiProgress.completed} total={aiProgress.total} />
-      ) : null}
     </main>
   );
 }

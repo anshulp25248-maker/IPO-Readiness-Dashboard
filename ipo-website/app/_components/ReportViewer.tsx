@@ -20,6 +20,7 @@ function mergeParagraphLines(lines: string[]) {
     const startsNew =
       /^#{1,3}\s*/.test(line) ||
       /^(section\s+)?\d+\s*[.-]/i.test(line) ||
+      /^\*\*[^*\n]{2,90}\*\*\s*$/.test(line) ||
       isSubheading(line) ||
       /^RED FLAG:/i.test(cleaned) ||
       /^POSITIVE:/i.test(cleaned);
@@ -50,7 +51,7 @@ function isSubheading(line: string) {
 
 export function ReportViewer({ report }: { report: string }) {
   const sections = report
-    .split(/\n(?=(?:#{1,3}\s*)?(?:SECTION\s+)?\d+\s*[.-]|#{1,3}\s+)/i)
+    .split(/\n(?=(?:#{1,3}\s*)?(?:SECTION\s+)?\d+\s*[.-]|#{1,3}\s+|\*\*[^*\n]{2,90}\*\*\s*$)/im)
     .map((section) => section.trim())
     .filter(Boolean);
 
@@ -68,18 +69,18 @@ export function ReportViewer({ report }: { report: string }) {
         return (
           <section
             key={`${title}-${index}`}
-            className="rounded-2xl border border-white/45 bg-white/70 p-6 shadow-[0_18px_48px_rgba(15,23,42,0.12)] backdrop-blur-xl"
+            className="rounded-xl border border-white/45 bg-white/65 p-4 shadow-[0_12px_32px_rgba(15,23,42,0.1)] backdrop-blur-xl"
           >
-            <div className="flex items-start gap-4 border-b border-slate-950/10 pb-4">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-base font-black text-white">
+            <div className="flex items-start gap-3 border-b border-slate-950/10 pb-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-xs font-black text-white">
                 {index + 1}
               </span>
-              <h3 className="font-serif text-3xl font-black leading-tight text-slate-950 md:text-4xl">
+              <h3 className="text-base font-black leading-6 text-slate-950">
                 {title}
               </h3>
             </div>
 
-            <div className="mt-5 space-y-4 text-[15px] font-medium leading-8 text-slate-900">
+            <div className="mt-4 space-y-3 text-sm font-medium leading-6 text-slate-900">
               {body.map((line, lineIndex) => {
                 const cleaned = cleanLine(line);
                 if (!cleaned) return null;
@@ -91,7 +92,7 @@ export function ReportViewer({ report }: { report: string }) {
                   return (
                     <h4
                       key={`${cleaned}-${lineIndex}`}
-                      className="pt-2 text-lg font-black uppercase tracking-[0.12em] text-blue-950"
+                      className="pt-1 text-sm font-black text-blue-950"
                     >
                       {cleaned}
                     </h4>
@@ -101,12 +102,12 @@ export function ReportViewer({ report }: { report: string }) {
                 return (
                   <p
                     key={`${cleaned}-${lineIndex}`}
-                    className={`rounded-xl px-4 py-3 text-justify leading-8 ${
+                    className={`rounded-lg px-3 py-2 text-justify leading-6 ${
                       isRedFlag
                         ? "border border-rose-200 bg-rose-50/85 font-semibold text-rose-950"
                         : isPositive
                           ? "border border-emerald-200 bg-emerald-50/80 font-semibold text-emerald-950"
-                          : "bg-white/35 text-slate-950"
+                          : "bg-white/25 text-slate-950"
                     }`}
                   >
                     {cleaned}

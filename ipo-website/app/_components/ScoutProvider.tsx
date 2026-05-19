@@ -3,22 +3,24 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   Company,
+  FactorMarks,
   FactorWeights,
   FactorSelection,
   calculateScore,
   calculateWeightedScore,
   companies as sampleCompanies,
+  defaultFactorMarks,
   defaultFactorWeights,
   defaultFactorSelection,
   factorKeys,
   rankCompanies,
   validateWeights,
+  weightsFromMarks,
 } from "../_data/companies";
 import {
   applyParserFilters,
   assignReadinessBand,
   bandMessages,
-  normalizeWeights,
   scoreCompanyDeterministically,
 } from "../_lib/scout-v2";
 
@@ -43,6 +45,8 @@ type ScoutContextValue = {
   pendingFactorSelection: FactorSelection;
   factorWeights: FactorWeights;
   pendingFactorWeights: FactorWeights;
+  factorMarks: FactorMarks;
+  pendingFactorMarks: FactorMarks;
   includedFactorCount: number;
   uploadStatus: string;
   scoringStatus: string;
@@ -68,6 +72,8 @@ type StoredScoutState = {
   pendingFactorSelection?: FactorSelection;
   factorWeights?: FactorWeights;
   pendingFactorWeights?: FactorWeights;
+  factorMarks?: FactorMarks;
+  pendingFactorMarks?: FactorMarks;
 };
 
 type UploadParseResponse = {
@@ -91,6 +97,13 @@ function readStoredState(): StoredScoutState {
     window.localStorage.removeItem(storageKey);
     return {};
   }
+}
+
+function normalizeMarks(input: Partial<FactorMarks> | undefined): FactorMarks {
+  return factorKeys.reduce((marks, key) => {
+    marks[key] = Math.max(0, Math.min(10, Math.round(Number(input?.[key] ?? defaultFactorMarks[key] ?? 0))));
+    return marks;
+  }, {} as FactorMarks);
 }
 
 function slug(value: string) {
@@ -416,11 +429,17 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     ...defaultFactorSelection,
     ...(readStoredState().pendingFactorSelection ?? readStoredState().factorSelection),
   }));
+  const [factorMarks, setFactorMarks] = useState<FactorMarks>(() =>
+    normalizeMarks(readStoredState().factorMarks),
+  );
+  const [pendingFactorMarks, setPendingFactorMarks] = useState<FactorMarks>(() =>
+    normalizeMarks(readStoredState().pendingFactorMarks ?? readStoredState().factorMarks),
+  );
   const [factorWeights, setFactorWeights] = useState<FactorWeights>(() =>
-    normalizeWeights(readStoredState().factorWeights),
+    weightsFromMarks(normalizeMarks(readStoredState().factorMarks)),
   );
   const [pendingFactorWeights, setPendingFactorWeights] = useState<FactorWeights>(() =>
-    normalizeWeights(readStoredState().pendingFactorWeights ?? readStoredState().factorWeights),
+    weightsFromMarks(normalizeMarks(readStoredState().pendingFactorMarks ?? readStoredState().factorMarks)),
   );
   const [uploadStatus, setUploadStatus] = useState("Sample company universe loaded.");
   const [scoringStatus, setScoringStatus] = useState("Scoring uses Scout Smarter V2 default weighted factors.");
@@ -433,17 +452,17 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     try {
       window.localStorage.setItem(
         storageKey,
-        JSON.stringify({ factorSelection, pendingFactorSelection, factorWeights, pendingFactorWeights }),
+        JSON.stringify({ factorSelection, pendingFactorSelection, factorMarks, pendingFactorMarks, factorWeights, pendingFactorWeights }),
       );
       window.localStorage.removeItem("scout-smarter-state");
       window.localStorage.removeItem("scout-smarter-state-v2");
     } catch {
       window.localStorage.removeItem(storageKey);
     }
-  }, [factorSelection, pendingFactorSelection, factorWeights, pendingFactorWeights]);
+  }, [factorSelection, pendingFactorSelection, factorMarks, pendingFactorMarks, factorWeights, pendingFactorWeights]);
 
   const ranked = useMemo(() => rankCompanies(companies, factorWeights), [companies, factorWeights]);
-  const includedFactorCount = factorKeys.length;
+  const includedFactorCount = factorKeys.filter((key) => factorMarks[key] > 0).length;
 
   async function handleUpload(file: File) {
     setUploadStatus(`Reading ${file.name} with parser...`);
@@ -493,16 +512,13 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
   }
 
   function setPendingFactorWeight(key: keyof FactorWeights, value: number) {
-    setPendingFactorWeights((current) => {
-      const otherTotal = factorKeys.reduce((sum, factorKey) => {
-        return factorKey === key ? sum : sum + Number(current[factorKey] ?? 0);
-      }, 0);
-      const maxAllowed = Math.min(30, Math.max(0, 100 - otherTotal));
-
-      return {
+    setPendingFactorMarks((current) => {
+      const next = {
         ...current,
-        [key]: Math.max(0, Math.min(maxAllowed, Number(value) || 0)),
+        [key]: Math.max(0, Math.min(10, Math.round(Number(value) || 0))),
       };
+      setPendingFactorWeights(weightsFromMarks(next));
+      return next;
     });
   }
 
@@ -594,6 +610,7 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     setAiScoreReport("");
     setFactorSelection(defaultFactorSelection);
     setPendingFactorSelection(defaultFactorSelection);
+    setFactorMarks(pendingFactorMarks);
     setFactorWeights(pendingFactorWeights);
 
     if (!scorableCompanies.length) {
@@ -626,8 +643,10 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     setCompanies(seeded);
     setFactorSelection(defaultFactorSelection);
     setPendingFactorSelection(defaultFactorSelection);
-    setFactorWeights(defaultFactorWeights);
-    setPendingFactorWeights(defaultFactorWeights);
+    setFactorMarks(defaultFactorMarks);
+    setPendingFactorMarks(defaultFactorMarks);
+    setFactorWeights(weightsFromMarks(defaultFactorMarks));
+    setPendingFactorWeights(weightsFromMarks(defaultFactorMarks));
     setParserSummary(null);
     setAiProgress({ total: 0, completed: 0, running: false });
     setUploadStatus("Sample company universe loaded.");
@@ -646,6 +665,8 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     pendingFactorSelection,
     factorWeights,
     pendingFactorWeights,
+    factorMarks,
+    pendingFactorMarks,
     includedFactorCount,
     uploadStatus,
     scoringStatus,

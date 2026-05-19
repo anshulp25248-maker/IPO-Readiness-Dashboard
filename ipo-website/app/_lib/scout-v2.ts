@@ -497,9 +497,13 @@ export function scoreCompanyDeterministically(company: Company, weights: FactorW
 export function normalizeWeights(input: Partial<FactorWeights> | undefined): FactorWeights {
   const weights = { ...defaultFactorWeights, ...(input ?? {}) };
   factorKeys.forEach((key) => {
-    weights[key] = Math.max(0, Math.min(30, Number(weights[key] ?? 0)));
+    weights[key] = Math.max(0, Number(weights[key] ?? 0));
   });
   const total = factorKeys.reduce((sum, key) => sum + weights[key], 0);
   if (Math.abs(total - 100) < 0.001) return weights;
-  return defaultFactorWeights;
+  if (total <= 0) return defaultFactorWeights;
+  return factorKeys.reduce((normalized, key) => {
+    normalized[key] = (weights[key] / total) * 100;
+    return normalized;
+  }, {} as FactorWeights);
 }

@@ -71,11 +71,11 @@ const cdrTabs = [
   {
     key: "docx-generation",
     label: "DOCX Generation",
-    description: "Generate and export one comprehensive paragraph-style CDR covering all five analysis tabs.",
+    description: "Generate and export one detailed CDR built from all five section-specific CDR lanes.",
     sections: [
-      "Comprehensive investment-banking CDR",
-      "Navy bold section headings",
-      "Paragraph-style body text with no markdown numbering",
+      "Sector, industry, competitor, director, and company sections",
+      "Same section-specific Groq and Tavily keys",
+      "Bold short headers with detailed body text",
       "Red formatting for risk flags",
       "Source feed appendix",
     ],
@@ -162,7 +162,11 @@ export default function CdrPage() {
 
   async function generateCdr() {
     setIsGenerating(true);
-    setStatus(`Generating ${activeSpec.label} with Groq and live feed evidence...`);
+    setStatus(
+      activeTab === "docx-generation"
+        ? "Generating the full CDR from all section-specific Groq and Tavily lanes..."
+        : `Generating real-time ${activeSpec.label} with its Groq and Tavily lane...`,
+    );
     setReport("");
     setSources([]);
 
@@ -181,7 +185,11 @@ export default function CdrPage() {
       if (!response.ok) throw new Error(data.error || "CDR generation failed.");
       setReport(data.report || "No CDR report returned.");
       setSources(data.sources || []);
-      setStatus(`${activeSpec.label} generated from uploaded data and live feed evidence.`);
+      setStatus(
+        activeTab === "docx-generation"
+          ? "Comprehensive CDR generated from all section reports and live feed evidence."
+          : `${activeSpec.label} generated from uploaded data and real-time live feed evidence.`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       setStatus(

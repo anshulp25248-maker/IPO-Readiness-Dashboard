@@ -1,4 +1,4 @@
-const CACHE_NAME = "smart-scouter-v1";
+const CACHE_NAME = "smart-scouter-v2";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/offline.html"];
 
 self.addEventListener("install", (event) => {
@@ -46,6 +46,11 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (requestUrl.origin !== self.location.origin) return;
+
+  if (requestUrl.pathname.startsWith("/_next/")) {
+    event.respondWith(fetch(request).catch(() => caches.match(request)));
+    return;
+  }
 
   event.respondWith(
     caches.match(request).then((cached) => {

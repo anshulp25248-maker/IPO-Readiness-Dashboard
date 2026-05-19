@@ -63,6 +63,15 @@ export default function SmartScouterHome() {
             ))}
           </div>
         </nav>
+
+        <div className="text-center">
+          <p className="font-serif text-3xl font-black tracking-normal text-slate-950 sm:text-4xl">
+            GreenFlow Ventures Ltd.
+          </p>
+          <p className="mt-2 text-xs font-black uppercase tracking-[0.28em] text-slate-800/70">
+            Venture Intelligence Dashboard
+          </p>
+        </div>
       </section>
     </main>
   );

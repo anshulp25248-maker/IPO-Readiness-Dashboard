@@ -66,6 +66,7 @@ export const factorKeys = Object.keys(factorLabels) as FactorKey[];
 
 export type FactorSelection = Record<FactorKey, boolean>;
 export type FactorWeights = Record<FactorKey, number>;
+export type FactorMarks = Record<FactorKey, number>;
 export type IpoReadinessBand = "IPO Ready" | "Near Ready" | "Development Stage" | "Not Recommended";
 
 export type ParserRejectionSummary = {
@@ -93,6 +94,11 @@ export const defaultFactorWeights: FactorWeights = {
   capitalRatio: 8,
   geography: 6,
 };
+
+export const defaultFactorMarks: FactorMarks = factorKeys.reduce((marks, key) => {
+  marks[key] = 10;
+  return marks;
+}, {} as FactorMarks);
 
 export const companies: Company[] = [
   {
@@ -284,7 +290,31 @@ export function weightsFromSelection(selection: FactorSelection): FactorWeights 
 export function validateWeights(weights: FactorWeights) {
   const values = factorKeys.map((key) => Number(weights[key] ?? 0));
   const total = values.reduce((sum, weight) => sum + weight, 0);
-  return values.every((weight) => weight >= 0 && weight <= 30) && Math.abs(total - 100) < 0.001;
+  return values.every((weight) => weight >= 0) && Math.abs(total - 100) < 0.001;
+}
+
+export function weightsFromMarks(marks: Partial<FactorMarks> | undefined): FactorWeights {
+  const cleanedMarks = factorKeys.reduce((cleaned, key) => {
+    cleaned[key] = Math.max(0, Math.min(10, Math.round(Number(marks?.[key] ?? defaultFactorMarks[key] ?? 0))));
+    return cleaned;
+  }, {} as FactorMarks);
+  const weightedMarks = factorKeys.reduce((values, key) => {
+    values[key] = cleanedMarks[key] > 0 ? cleanedMarks[key] * defaultFactorWeights[key] : 0;
+    return values;
+  }, {} as FactorWeights);
+  const total = factorKeys.reduce((sum, key) => sum + weightedMarks[key], 0);
+
+  if (total <= 0) {
+    return factorKeys.reduce((weights, key) => {
+      weights[key] = 0;
+      return weights;
+    }, {} as FactorWeights);
+  }
+
+  return factorKeys.reduce((weights, key) => {
+    weights[key] = (weightedMarks[key] / total) * 100;
+    return weights;
+  }, {} as FactorWeights);
 }
 
 export function calculateWeightedScore(company: Company, weights: FactorWeights = defaultFactorWeights) {

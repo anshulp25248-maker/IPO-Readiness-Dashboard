@@ -31,8 +31,6 @@ export function ScoreBadge({ score }: { score: number }) {
 }
 
 export function FactorGrid({ company }: { company: Company }) {
-  const { factorWeights } = useScout();
-
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {Object.entries(company.factors).map(([key, value]) => (
@@ -42,7 +40,7 @@ export function FactorGrid({ company }: { company: Company }) {
               {factorLabels[key as keyof typeof factorLabels]}
             </p>
             <p className="font-mono text-sm font-black text-indigo-950">
-              {value.toFixed(1)} x {factorWeights[key as keyof typeof factorWeights]}%
+              {Math.round(value)}/10
             </p>
           </div>
           <div className="mt-3 h-2 rounded-full bg-white/30">
