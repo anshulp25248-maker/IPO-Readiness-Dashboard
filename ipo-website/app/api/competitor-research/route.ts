@@ -6,6 +6,42 @@ import { investmentBankingReportFormat } from "../_lib/report-format";
 
 export const runtime = "nodejs";
 
+function compactCompany(company: Company) {
+  return {
+    name: company.name,
+    cin: company.cin,
+    sector: company.sector,
+    nicCode: company.nicCode,
+    activity: company.activity,
+    city: company.city,
+    state: company.state,
+    status: company.status,
+    paidUpCapital: company.paidUpCapital,
+    authorizedCapital: company.authorizedCapital,
+    director: company.director
+      ? {
+          name: company.director.name,
+          role: company.director.role,
+          directorships: company.director.directorships,
+        }
+      : undefined,
+    factors: company.factors,
+    competitors: company.competitors?.slice(0, 5) ?? [],
+  };
+}
+
+function compactPeer(peer: Company) {
+  return {
+    name: peer.name,
+    cin: peer.cin,
+    sector: peer.sector,
+    nicCode: peer.nicCode,
+    activity: peer.activity,
+    paidUpCapital: peer.paidUpCapital,
+    score: peer.adjustedScore ?? peer.compositeScore ?? null,
+  };
+}
+
 function cleanProviderDetails(message: string) {
   return message
     .replace(/\bGroq\b/gi, "analysis service")
@@ -23,18 +59,19 @@ export async function POST(request: Request) {
     const similarPeers = (peers || [])
       .filter((peer) => peer.id !== company.id)
       .filter((peer) => peer.nicCode === company.nicCode || peer.activity === company.activity || peer.sector === company.sector)
-      .slice(0, 25);
+      .slice(0, 12)
+      .map(compactPeer);
 
     const results = await tavilySearchLane("competitor-analysis", [
       `${company.name} ${company.activity} ${company.nicCode} competitors peers India private limited`,
       `${company.name} similar companies India competitors Zauba Tofler LinkedIn`,
       `${company.activity} ${company.sector} India listed unlisted competitors market share`,
-    ]);
+    ], { maxResultsPerQuery: 3, maxSources: 5 });
 
     const prompt = `Build a competitor and business-model diligence report from uploaded/parser data, the supplied peer universe, and the dedicated Competitor Analysis live-feed lane. Do not invent facts.
 
 TARGET COMPANY
-${JSON.stringify(company, null, 2)}
+${JSON.stringify(compactCompany(company), null, 2)}
 
 SIMILAR COMPANIES FROM UPLOADED LIST
 ${JSON.stringify(similarPeers, null, 2)}
@@ -54,7 +91,7 @@ Write the competitor report with these major section headings and detailed parag
       system: "You are a competition and business-model diligence analyst for private-company investing.",
       prompt,
       temperature: 0.12,
-      maxTokens: 3000,
+      maxTokens: 1500,
     });
 
     return NextResponse.json({

@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { Company, factorLabels } from "../_data/companies";
+import { Company, factorKeys, factorLabels } from "../_data/companies";
 import { useScout } from "./ScoutProvider";
 import { flagMessages } from "../_lib/scout-v2";
 
@@ -31,13 +31,20 @@ export function ScoreBadge({ score }: { score: number }) {
 }
 
 export function FactorGrid({ company }: { company: Company }) {
+  const { factorMarks } = useScout();
+  const visibleFactorKeys = factorKeys.filter((key) => (factorMarks[key] ?? 0) > 0 && key in company.factors).slice(0, 6);
+  const displayKeys = visibleFactorKeys.length ? visibleFactorKeys : factorKeys.slice(0, 6);
+
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {Object.entries(company.factors).map(([key, value]) => (
-        <div key={key} className="rounded-xl border border-amber-400/45 bg-white/55 p-4 shadow-[0_10px_24px_rgba(146,105,21,0.10)] transition">
+    <div className="grid gap-4 md:grid-cols-3">
+      {displayKeys.map((key) => {
+        const value = Number(company.factors[key] ?? 0);
+
+        return (
+        <div key={key} className="min-h-32 rounded-xl border border-amber-400/45 bg-white/55 p-5 shadow-[0_10px_24px_rgba(146,105,21,0.10)] transition">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-bold text-slate-900">
-              {factorLabels[key as keyof typeof factorLabels]}
+            <p className="text-sm font-black leading-5 text-slate-900">
+              {factorLabels[key]}
             </p>
             <p className="font-mono text-sm font-black text-indigo-950">
               {Math.round(value)}/10
@@ -49,13 +56,13 @@ export function FactorGrid({ company }: { company: Company }) {
               style={{ width: `${value * 10}%` }}
             />
           </div>
-          {company.factorReasoning?.[key as keyof typeof company.factorReasoning] ? (
-            <p className="mt-3 text-xs font-semibold leading-5 text-slate-800">
-              {company.factorReasoning[key as keyof typeof company.factorReasoning]}
+          {company.factorReasoning?.[key] ? (
+            <p className="mt-3 line-clamp-3 text-xs font-semibold leading-5 text-slate-800">
+              {company.factorReasoning[key]}
             </p>
           ) : null}
         </div>
-      ))}
+      )})}
     </div>
   );
 }
@@ -131,7 +138,7 @@ export function CompanyTable({ limit, companies }: { limit?: number; companies?:
                   {expanded ? (
                     <tr key={`${company.id}-detail`} className="border-b border-white/15">
                       <td colSpan={8} className="px-5 py-5">
-                        <div className="grid gap-4 lg:grid-cols-[1fr_0.85fr]">
+                        <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
                           <FactorGrid company={company} />
                           <div className="grid gap-3">
                             <div className="rounded-xl bg-white/55 p-4">
