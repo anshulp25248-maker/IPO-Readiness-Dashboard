@@ -3,6 +3,7 @@
 import { FeatureCard } from "./_components/FeatureCard";
 import { Drawer } from "./_components/AppShell";
 import { useScout } from "./_components/ScoutProvider";
+import { SmartScouterLogo } from "./_components/SmartScouterBrand";
 
 const primaryCards = [
   { title: "Dashboard", href: "/dashboard", icon: "dashboard" },
@@ -42,6 +43,9 @@ export default function SmartScouterHome() {
 
       <section className="mx-auto flex w-full max-w-6xl animate-page-enter flex-col items-center justify-start gap-8 pt-24 sm:gap-12 sm:pt-20 lg:pt-14">
         <header className="space-y-4 text-center sm:space-y-5">
+          <div className="flex justify-center">
+            <SmartScouterLogo />
+          </div>
           <h1 className="bg-gradient-to-r from-slate-950 via-indigo-950 to-purple-900 bg-clip-text font-serif text-5xl font-bold tracking-normal text-transparent sm:text-7xl lg:text-8xl">
             Smart Scouter
           </h1>

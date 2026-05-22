@@ -41,3 +41,293 @@ body {
 .animate-page-enter {
   animation: page-enter 720ms ease-out both;
 }
+
+@keyframes intro-fade-away {
+  0%,
+  82% {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@keyframes intro-logo-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.94);
+  }
+
+  18%,
+  72% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.98);
+  }
+}
+
+@keyframes intro-rocket-launch {
+  0% {
+    transform: translate(-50%, 22%) scale(0.68) rotate(-4deg);
+  }
+
+  22% {
+    transform: translate(-50%, 4%) scale(0.78) rotate(0deg);
+  }
+
+  52% {
+    transform: translate(-50%, -8%) scale(0.9) rotate(2deg);
+  }
+
+  78% {
+    transform: translate(-50%, -34%) scale(0.98) rotate(-1deg);
+  }
+
+  100% {
+    transform: translate(-50%, -86%) scale(0.82) rotate(0deg);
+  }
+}
+
+@keyframes intro-flame-pulse {
+  0%,
+  20% {
+    opacity: 0;
+    transform: translateX(-50%) scaleY(0.4);
+  }
+
+  34%,
+  78% {
+    opacity: 0.95;
+    transform: translateX(-50%) scaleY(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scaleY(1.8);
+  }
+}
+
+@keyframes intro-screen-pop {
+  0%,
+  22% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.9);
+  }
+
+  38%,
+  80% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.96);
+  }
+}
+
+@keyframes intro-dot-scan {
+  0%,
+  30% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.6);
+  }
+
+  46%,
+  78% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-22px) scale(0.72);
+  }
+}
+
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(255, 255, 255, 0.92), rgba(223, 240, 184, 0.86) 38%, rgba(188, 214, 144, 0.92) 100%),
+    linear-gradient(135deg, #dfe9b8, #eef3d1);
+  animation: intro-fade-away 4.7s ease both;
+}
+
+.intro-logo {
+  position: absolute;
+  left: clamp(1.25rem, 4vw, 4rem);
+  top: clamp(1.25rem, 4vw, 3.5rem);
+  animation: intro-logo-rise 4.4s ease both;
+}
+
+.intro-copy {
+  position: absolute;
+  bottom: clamp(2rem, 8vh, 4.5rem);
+  left: 1rem;
+  right: 1rem;
+  text-align: center;
+  animation: intro-logo-rise 4.4s ease 0.15s both;
+}
+
+.intro-scene {
+  position: relative;
+  width: min(88vw, 720px);
+  height: min(62vh, 560px);
+}
+
+.intro-rocket {
+  position: absolute;
+  left: 50%;
+  bottom: 8%;
+  z-index: 2;
+  width: min(58vw, 340px);
+  filter: drop-shadow(0 34px 46px rgba(15, 23, 42, 0.22));
+  transform-origin: 50% 85%;
+  animation: intro-rocket-launch 4.4s cubic-bezier(0.17, 0.74, 0.22, 1) both;
+}
+
+.intro-flame {
+  position: absolute;
+  left: 50%;
+  bottom: 4%;
+  width: 56px;
+  height: 150px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff7ad, #fb923c 46%, rgba(239, 68, 68, 0));
+  filter: blur(1px);
+  transform-origin: top;
+  animation: intro-flame-pulse 4.4s ease both;
+}
+
+.intro-screen {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  width: min(34vw, 210px);
+  border: 1px solid rgba(250, 204, 21, 0.65);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 18px;
+  box-shadow: 0 24px 58px rgba(99, 111, 45, 0.16);
+  backdrop-filter: blur(18px);
+  animation: intro-screen-pop 4.4s ease both;
+}
+
+.intro-screen-left {
+  left: 0;
+  top: 26%;
+}
+
+.intro-screen-right {
+  right: 0;
+  top: 34%;
+  animation-delay: 0.18s;
+}
+
+.intro-screen span {
+  display: block;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #172554, #047857);
+}
+
+.intro-screen span:nth-child(2) {
+  width: 74%;
+}
+
+.intro-screen span:nth-child(3) {
+  width: 52%;
+}
+
+.intro-graph {
+  position: absolute;
+  z-index: 3;
+  width: 96px;
+  height: 54px;
+  border-left: 4px solid #172554;
+  border-bottom: 4px solid #172554;
+  opacity: 0;
+  animation: intro-dot-scan 4.4s ease both;
+}
+
+.intro-graph::after {
+  content: "";
+  position: absolute;
+  inset: 8px 0 8px 8px;
+  clip-path: polygon(0 76%, 26% 54%, 45% 62%, 70% 26%, 100% 8%, 100% 100%, 0 100%);
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.82), rgba(15, 23, 42, 0.2));
+}
+
+.intro-graph-one {
+  left: 20%;
+  bottom: 24%;
+}
+
+.intro-graph-two {
+  right: 18%;
+  bottom: 19%;
+  animation-delay: 0.32s;
+}
+
+.intro-company-dot {
+  position: absolute;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #0f172a;
+  box-shadow: 0 0 0 8px rgba(52, 211, 153, 0.18);
+  opacity: 0;
+  animation: intro-dot-scan 4.4s ease both;
+}
+
+.intro-dot-one {
+  left: 28%;
+  top: 22%;
+  animation-delay: 0.42s;
+}
+
+.intro-dot-two {
+  right: 26%;
+  top: 24%;
+  animation-delay: 0.58s;
+}
+
+.intro-dot-three {
+  left: 48%;
+  top: 18%;
+  animation-delay: 0.74s;
+}
+
+@media (max-width: 640px) {
+  .intro-logo {
+    left: 1rem;
+    right: 1rem;
+  }
+
+  .intro-screen {
+    width: 150px;
+    padding: 14px;
+  }
+
+  .intro-screen-left {
+    left: 2%;
+  }
+
+  .intro-screen-right {
+    right: 2%;
+  }
+}

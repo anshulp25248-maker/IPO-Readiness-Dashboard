@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { factorKeys, factorLabels } from "../_data/companies";
 import { useScout } from "./ScoutProvider";
+import { SmartScouterLogo } from "./SmartScouterBrand";
 
 type AppIconName = "dashboard" | "report" | "ranking" | "profile" | "competitors" | "upload" | "weights";
 
@@ -141,10 +142,7 @@ export function Drawer() {
         }`}
       >
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-800/70">Controls</p>
-            <h2 className="font-serif text-3xl font-bold text-slate-950">Smart Scouter</h2>
-          </div>
+          <SmartScouterLogo />
           <button
             type="button"
             onClick={() => setDrawerOpen(false)}
@@ -298,13 +296,16 @@ export function AppShell({ title, eyebrow = "Smart Scouter", children }: AppShel
         <header className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Hamburger />
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-800/70">
-                {eyebrow}
-              </p>
+            <div className="flex items-center gap-4">
+              <SmartScouterLogo compact />
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-800/70">
+                  {eyebrow}
+                </p>
               <h1 className="font-serif text-3xl font-bold text-slate-950 sm:text-4xl">
                 {title}
               </h1>
+              </div>
             </div>
           </div>
           <nav className="hidden items-center gap-2 rounded-2xl border border-amber-400/70 bg-white/55 p-1 shadow-[0_18px_42px_rgba(146,105,21,0.18)] backdrop-blur-xl lg:flex">
