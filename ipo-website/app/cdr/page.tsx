@@ -425,38 +425,47 @@ export default function CdrPage() {
               {status}
             </p>
           ) : null}
-
-          {report ? (
-            <div className="mt-5 grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
-              <article className="max-h-[760px] overflow-y-auto rounded-2xl border border-amber-400/45 bg-white/40 p-4 shadow-inner">
-                <ReportViewer report={report} />
-              </article>
-              <div className="rounded-2xl border border-amber-400/45 bg-white/50 p-4">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-800/70">
-                  Live Feed Sources
-                </p>
-                <div className="mt-3 grid gap-2">
-                  {sources.length ? (
-                    sources.slice(0, 8).map((source, index) => (
-                      <a
-                        key={`${source.url || source.title}-${index}`}
-                        href={source.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-xl bg-white/55 px-3 py-2 text-xs font-bold leading-5 text-indigo-950 transition hover:bg-white/80"
-                      >
-                        {source.title || source.url || "Source"}
-                      </a>
-                    ))
-                  ) : (
-                    <p className="text-sm font-semibold text-slate-800">No live sources returned.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : null}
         </GlassPanel>
       </div>
+
+      {report ? (
+        <GlassPanel className="mt-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">Generated Report</p>
+              <h2 className="mt-2 font-serif text-3xl font-bold text-slate-950">{activeSpec.label}</h2>
+            </div>
+            <p className="rounded-xl bg-white/55 px-4 py-2 text-sm font-black text-slate-900">
+              {sources.length} live sources
+            </p>
+          </div>
+          <article className="mt-5 max-h-[900px] overflow-y-auto rounded-2xl border border-amber-400/45 bg-white/45 p-6 shadow-inner lg:p-8">
+            <ReportViewer report={report} />
+          </article>
+          <div className="mt-4 rounded-2xl border border-amber-400/45 bg-white/45 p-4">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-800/70">
+              Live Feed Sources
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {sources.length ? (
+                sources.slice(0, 10).map((source, index) => (
+                  <a
+                    key={`${source.url || source.title}-${index}`}
+                    href={source.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="max-w-sm rounded-xl bg-white/60 px-3 py-2 text-xs font-bold leading-5 text-indigo-950 transition hover:bg-white/85"
+                  >
+                    {source.title || source.url || "Source"}
+                  </a>
+                ))
+              ) : (
+                <p className="text-sm font-semibold text-slate-800">No live sources returned.</p>
+              )}
+            </div>
+          </div>
+        </GlassPanel>
+      ) : null}
     </AppShell>
   );
 }
