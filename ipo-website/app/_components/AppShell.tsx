@@ -10,15 +10,16 @@ type AppIconName = "dashboard" | "report" | "ranking" | "profile" | "competitors
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
   { label: "CDR", href: "/cdr", icon: "report" },
-  { label: "Top Companies", href: "/top-10-companies", icon: "ranking" },
+  { label: "Other Companies", href: "/top-10-companies", icon: "ranking" },
   { label: "Director Profile", href: "/director-profile", icon: "profile" },
   { label: "Competitors", href: "/competitors", icon: "competitors" },
 ] as const;
 
 function AppIcon({ name, className = "h-5 w-5" }: { name: AppIconName; className?: string }) {
+  const iconClassName = `${className} drop-shadow-[0_5px_8px_rgba(146,105,21,0.35)]`;
   if (name === "dashboard") {
     return (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <svg className={iconClassName} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
         <path d="M4 13h6V4H4v9Z" />
         <path d="M14 20h6V4h-6v16Z" />
         <path d="M4 20h6v-3H4v3Z" />
@@ -28,7 +29,7 @@ function AppIcon({ name, className = "h-5 w-5" }: { name: AppIconName; className
 
   if (name === "report") {
     return (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <svg className={iconClassName} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
         <path d="M7 3h7l4 4v14H7V3Z" />
         <path d="M14 3v5h5" />
         <path d="M10 12h6" />
@@ -39,7 +40,7 @@ function AppIcon({ name, className = "h-5 w-5" }: { name: AppIconName; className
 
   if (name === "ranking") {
     return (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <svg className={iconClassName} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
         <path d="M5 20v-6h4v6H5Z" />
         <path d="M10 20V4h4v16h-4Z" />
         <path d="M15 20v-9h4v9h-4Z" />
@@ -49,7 +50,7 @@ function AppIcon({ name, className = "h-5 w-5" }: { name: AppIconName; className
 
   if (name === "profile") {
     return (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <svg className={iconClassName} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
         <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
         <path d="M4 21a8 8 0 0 1 16 0" />
       </svg>
@@ -58,7 +59,7 @@ function AppIcon({ name, className = "h-5 w-5" }: { name: AppIconName; className
 
   if (name === "upload") {
     return (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <svg className={iconClassName} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
         <path d="M12 16V4" />
         <path d="M7 9l5-5 5 5" />
         <path d="M5 20h14" />
@@ -68,7 +69,7 @@ function AppIcon({ name, className = "h-5 w-5" }: { name: AppIconName; className
 
   if (name === "weights") {
     return (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <svg className={iconClassName} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
         <path d="M5 6h14" />
         <path d="M5 12h14" />
         <path d="M5 18h14" />
@@ -80,7 +81,7 @@ function AppIcon({ name, className = "h-5 w-5" }: { name: AppIconName; className
   }
 
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <svg className={iconClassName} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
       <path d="M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
       <path d="M16 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
       <path d="M2 21a6 6 0 0 1 12 0" />
@@ -97,7 +98,7 @@ function Hamburger() {
       type="button"
       aria-label="Main menu"
       onClick={() => setDrawerOpen(true)}
-      className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/45 bg-white/50 shadow-lg backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/65"
+      className="flex h-11 w-11 items-center justify-center rounded-xl border border-amber-400/70 bg-white/55 shadow-[0_14px_30px_rgba(146,105,21,0.22)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/70"
     >
       <span className="flex w-5 flex-col gap-1.5">
         <span className="h-0.5 rounded-full bg-slate-950" />
@@ -135,7 +136,7 @@ export function Drawer() {
         onClick={() => setDrawerOpen(false)}
       />
       <aside
-        className={`fixed left-0 top-0 z-50 h-full w-[min(92vw,390px)] overflow-y-auto border-r border-white/45 bg-[linear-gradient(135deg,rgba(125,211,252,0.78),rgba(153,246,228,0.74),rgba(220,252,231,0.78))] p-5 shadow-[0_28px_90px_rgba(15,23,42,0.24)] backdrop-blur-2xl transition-transform duration-300 ${
+        className={`fixed left-0 top-0 z-50 h-full w-[min(92vw,390px)] overflow-y-auto border-r border-amber-400/70 bg-[linear-gradient(135deg,rgba(197,224,163,0.86),rgba(221,236,184,0.82),rgba(239,243,209,0.84))] p-5 shadow-[0_28px_90px_rgba(83,94,35,0.24)] backdrop-blur-2xl transition-transform duration-300 ${
           drawerOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -153,7 +154,7 @@ export function Drawer() {
           </button>
         </div>
 
-        <div className="mt-6 rounded-2xl border border-white/45 bg-white/50 p-4 shadow-lg backdrop-blur-xl">
+        <div className="mt-6 rounded-2xl border border-amber-400/60 bg-white/55 p-4 shadow-lg backdrop-blur-xl">
           <p className="flex items-center gap-2 text-sm font-black text-slate-950">
             <AppIcon name="upload" className="h-5 w-5" />
             Upload Company File
@@ -185,7 +186,7 @@ export function Drawer() {
           <p className="mt-2 text-xs font-black text-indigo-950">{companies.length} companies in workspace</p>
         </div>
 
-        <div className="mt-5 rounded-2xl border border-white/45 bg-white/50 p-4 shadow-lg backdrop-blur-xl">
+        <div className="mt-5 rounded-2xl border border-amber-400/60 bg-white/55 p-4 shadow-lg backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3">
             <p className="flex items-center gap-2 text-sm font-black text-slate-950">
               <AppIcon name="weights" className="h-5 w-5" />
@@ -247,7 +248,7 @@ export function Drawer() {
             }}
             className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-indigo-950 disabled:cursor-not-allowed disabled:bg-slate-500 disabled:hover:translate-y-0"
           >
-            {aiProgress.running ? "AI Running" : "Run Scoring"}
+            {aiProgress.running ? "Scoring" : "Run Scoring"}
           </button>
           <p className="mt-3 text-xs font-semibold leading-5 text-slate-800">{scoringStatus}</p>
           {aiProgress.total ? (
@@ -259,13 +260,13 @@ export function Drawer() {
                 />
               </div>
               <p className="mt-2 text-xs font-black text-slate-950">
-                AI screening {aiProgress.completed} of {aiProgress.total}
+                Screening {aiProgress.completed} of {aiProgress.total}
               </p>
             </div>
           ) : null}
         </div>
 
-        <nav className="mt-5 grid gap-2 rounded-2xl border border-white/45 bg-white/50 p-3 shadow-lg backdrop-blur-xl">
+        <nav className="mt-5 grid gap-2 rounded-2xl border border-amber-400/60 bg-white/55 p-3 shadow-lg backdrop-blur-xl">
           {navItems.map((item) => (
             <Link
               key={item.href}
@@ -291,7 +292,7 @@ type AppShellProps = {
 
 export function AppShell({ title, eyebrow = "Smart Scouter", children }: AppShellProps) {
   return (
-    <main className="min-h-screen bg-[linear-gradient(135deg,rgba(125,211,252,0.76),rgba(153,246,228,0.72),rgba(220,252,231,0.76))] px-4 py-5 text-slate-950 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[linear-gradient(135deg,rgba(188,214,144,0.82),rgba(221,236,184,0.78),rgba(239,243,209,0.82))] px-4 py-5 text-slate-950 sm:px-6 lg:px-8">
       <div className="min-h-screen transition duration-300">
         <Drawer />
         <header className="mx-auto flex max-w-7xl items-center justify-between gap-4">
@@ -306,12 +307,12 @@ export function AppShell({ title, eyebrow = "Smart Scouter", children }: AppShel
               </h1>
             </div>
           </div>
-          <nav className="hidden items-center gap-2 rounded-2xl border border-white/45 bg-white/50 p-1 shadow-lg backdrop-blur-xl lg:flex">
+          <nav className="hidden items-center gap-2 rounded-2xl border border-amber-400/70 bg-white/55 p-1 shadow-[0_18px_42px_rgba(146,105,21,0.18)] backdrop-blur-xl lg:flex">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-white/65"
+                className="flex items-center gap-2 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-amber-400/70 hover:bg-white/70"
               >
                 <AppIcon name={item.icon} className="h-4 w-4" />
                 {item.label}

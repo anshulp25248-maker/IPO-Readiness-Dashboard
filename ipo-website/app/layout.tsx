@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     default: "Smart Scouter",
     template: "%s | Smart Scouter",
   },
-  description: "An AI Powered Company Search Engine",
+  description: "Company Search and Investment Readiness Engine",
   applicationName: "Smart Scouter",
   manifest: "/manifest.webmanifest",
   appleWebApp: {

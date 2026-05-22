@@ -8,7 +8,7 @@ import { useScout } from "../_components/ScoutProvider";
 type DashboardIconName = "building" | "sector" | "location" | "capital" | "eligible" | "score" | "weights" | "filing";
 
 function DashboardIcon({ name }: { name: DashboardIconName }) {
-  const className = "h-5 w-5 text-slate-950";
+  const className = "h-5 w-5 text-slate-950 drop-shadow-[0_5px_8px_rgba(146,105,21,0.35)]";
 
   if (name === "building") {
     return (
@@ -170,19 +170,19 @@ export default function DashboardPage() {
           <GlassPanel>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">AI Investment Layer</p>
+                <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">Investment Layer</p>
                 <h3 className="mt-2 font-serif text-3xl font-bold text-slate-950">
                   {topCompany.ipoReadinessBand || topInsight?.recommendation || "Run Scoring"}
                 </h3>
               </div>
               {topInsight?.aiScore ? (
                 <span className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-black text-white">
-                  AI {topInsight.aiScore}/100
+                  {topInsight.aiScore}/100
                 </span>
               ) : null}
             </div>
             <p className="mt-4 rounded-xl bg-white/55 px-4 py-3 text-sm font-semibold leading-6 text-slate-900">
-              {topCompany.ipoReadinessMessage || topInsight?.rationale || aiScoreReport || scoringStatus || "Upload a file to run parser and AI screening."}
+              {topCompany.ipoReadinessMessage || topInsight?.rationale || aiScoreReport || scoringStatus || "Upload a file to run parser and screening."}
             </p>
             {topInsight?.redFlags?.length ? (
               <div className="mt-3 grid gap-2">
@@ -212,7 +212,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-5">
-        <CompanyTable limit={5} />
+        <CompanyTable />
       </div>
 
       <div className="mt-6 flex justify-center">
@@ -229,7 +229,7 @@ export default function DashboardPage() {
       {aiScoreReport ? (
         <GlassPanel className="mt-5">
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">
-            First AI Layer Report
+            First Screening Layer Report
           </p>
           <div className="mt-5 max-h-[680px] overflow-y-auto rounded-2xl border border-white/35 bg-white/35 p-4 shadow-inner">
             <ReportViewer report={aiScoreReport} />

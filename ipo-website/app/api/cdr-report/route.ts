@@ -87,7 +87,7 @@ async function tavilySearch(query: string, type: ReportType) {
     cache: "no-store",
   });
 
-  if (!response.ok) throw new Error(`Tavily search failed with ${response.status}`);
+  if (!response.ok) throw new Error(`Live feed search failed with ${response.status}`);
   const data = (await response.json()) as { results?: SearchResult[] };
   return data.results ?? [];
 }
@@ -113,6 +113,15 @@ function sourceContext(results: SearchResult[]) {
       [`${index + 1}. ${item.title || "Untitled"}`, `URL: ${item.url || "NA"}`, `Snippet: ${(item.content || "").slice(0, 320)}`].join("\n"),
     )
     .join("\n\n");
+}
+
+function cleanProviderDetails(message: string) {
+  return message
+    .replace(/\bGroq\b/gi, "analysis service")
+    .replace(/\bTavily\b/gi, "live feed")
+    .replace(/\bGemini\b/gi, "analysis service")
+    .replace(/\bOpenRouter\b/gi, "analysis service")
+    .replace(/No AI provider configured\.[^|]*/gi, "Analysis service is not configured.");
 }
 
 function sleep(ms: number) {
@@ -406,8 +415,8 @@ async function generateCdrSection(
     task: "cdr" as const,
     provider: "groq" as const,
     apiKey: cdrEnvValue(selectedReportType, "GROQ_API_KEY"),
-    providerLabel: `Groq ${taskConfig.label}`,
-    system: "You are Scout Smarter, an investment banking analyst preparing detailed CDR sections from uploaded parser data and live Tavily evidence. Be source-aware, skeptical, and never hallucinate.",
+    providerLabel: taskConfig.label,
+    system: "You are Scout Smarter, an investment banking analyst preparing detailed CDR sections from uploaded parser data and live feed evidence. Be source-aware, skeptical, and never hallucinate.",
     temperature: 0.12,
   };
   const parts = [];
@@ -448,7 +457,7 @@ async function generateComprehensiveCdr(company: Company, score: number | undefi
     task: "cdr",
     provider: "groq",
     apiKey: cdrEnvValue("comprehensive-cdr", "GROQ_API_KEY"),
-    providerLabel: `Groq ${taskConfig.label}`,
+    providerLabel: taskConfig.label,
     system: "You are Scout Smarter, preparing only the final recommendation for a comprehensive CDR. Use the section reports as evidence and do not invent new facts.",
     prompt: `Create the final recommendation section for this comprehensive CDR.
 
@@ -469,7 +478,7 @@ Write 2-4 detailed paragraphs. Reconcile sector attractiveness, industry structu
     maxTokens: taskConfig.maxTokens,
   });
   const report = [
-    `**Comprehensive CDR**\nThis document combines the live CDR section reports generated from the same section-specific Groq and Tavily lanes used by the CDR tabs. Uploaded MCA/parser data remains the source of truth for identity, capital, score, sector, activity, and director fields.`,
+    `**Comprehensive CDR**\nThis document combines the live CDR section reports generated from the same section-specific research and analysis lanes used by the CDR tabs. Uploaded MCA/parser data remains the source of truth for identity, capital, score, sector, activity, and director fields.`,
     ...sectionResults.map((section) => `**${section.label}**\n${section.report}`),
     finalAi.text || "**Final Recommendation**\nData Not Available - final recommendation could not be generated.",
   ].join("\n\n");
@@ -509,7 +518,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "CDR generation failed." },
+      { error: error instanceof Error ? cleanProviderDetails(error.message) : "CDR generation failed." },
       { status: 500 },
     );
   }

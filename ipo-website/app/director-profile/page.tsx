@@ -48,20 +48,24 @@ function SearchLinks({ query }: { query: string }) {
 
 export default function DirectorProfilePage() {
   const { rankedCompanies } = useScout();
-  const topFive = rankedCompanies.slice(0, 5);
   const [cin, setCin] = useState("");
+  const [companySearch, setCompanySearch] = useState("");
   const [research, setResearch] = useState<Record<string, ResearchState>>({});
-  const [manualStatus, setManualStatus] = useState("Enter CIN to research directors for a company outside the top 5.");
+  const [manualStatus, setManualStatus] = useState("Enter CIN to research directors for any company outside the uploaded workspace.");
   const [manualReport, setManualReport] = useState("");
+  const visibleCompanies = rankedCompanies.filter((company) => {
+    const search = companySearch.trim().toLowerCase();
+    return !search || company.name.toLowerCase().includes(search) || company.cin.toLowerCase().includes(search);
+  });
 
   async function researchDirectors(company?: Company, manualCin?: string) {
     const key = company?.id || "manual";
     setResearch((current) => ({
       ...current,
-      [key]: { status: "Searching MCA, Zauba, Tofler, LinkedIn/public feed...", report: "", sources: [] },
+      [key]: { status: "Analyzing uploaded director fields and company factors...", report: "", sources: [] },
     }));
     if (!company) {
-      setManualStatus("Searching MCA, Zauba, Tofler, LinkedIn/public feed...");
+      setManualStatus("Analyzing supplied CIN/company context...");
       setManualReport("");
     }
 
@@ -108,12 +112,12 @@ export default function DirectorProfilePage() {
               placeholder="Enter CIN"
               className="h-12 rounded-xl border border-white/45 bg-white/60 px-4 font-mono text-sm font-bold text-slate-950 outline-none focus:ring-4 focus:ring-white/50"
             />
-            <button
+          <button
               type="button"
               onClick={() => void researchDirectors(undefined, cin)}
               className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-indigo-950"
             >
-              Find Directors
+              Generate Director Diligence
             </button>
           </div>
         </div>
@@ -126,8 +130,25 @@ export default function DirectorProfilePage() {
         ) : null}
       </GlassPanel>
 
+      <GlassPanel className="mb-5">
+        <label className="grid gap-2">
+          <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-800/70">
+            Search Uploaded Companies
+          </span>
+          <input
+            value={companySearch}
+            onChange={(event) => setCompanySearch(event.target.value)}
+            placeholder="Type company name or CIN"
+            className="h-12 rounded-xl border border-amber-400/55 bg-white/60 px-4 text-sm font-bold text-slate-950 shadow-inner outline-none focus:ring-4 focus:ring-white/50"
+          />
+        </label>
+        <p className="mt-3 rounded-xl bg-white/45 px-4 py-3 text-sm font-bold text-slate-900">
+          Showing {visibleCompanies.length} of {rankedCompanies.length} parsed companies.
+        </p>
+      </GlassPanel>
+
       <div className="grid gap-5 lg:grid-cols-2">
-        {topFive.map((company) => (
+        {visibleCompanies.map((company) => (
           <GlassPanel key={company.id}>
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -158,7 +179,7 @@ export default function DirectorProfilePage() {
               onClick={() => void researchDirectors(company)}
               className="mt-5 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-indigo-950"
             >
-              Generate AI Director Diligence
+              Generate Director Diligence
             </button>
             {research[company.id]?.status ? (
               <p className="mt-3 rounded-xl bg-white/45 px-4 py-3 text-sm font-bold text-slate-900">

@@ -19,7 +19,6 @@ type SearchResult = {
   content?: string;
 };
 
-const tavilyUrl = "https://api.tavily.com/search";
 const factorKeys: FactorKey[] = [
   "paidUpCapital",
   "sector",
@@ -49,7 +48,7 @@ function normalizeStatus(value: unknown): Company["status"] {
 }
 
 function normalizeCompany(input: Record<string, unknown>, index: number): Company {
-  const name = String(input.name || input.companyName || `AI Company ${index + 1}`);
+  const name = String(input.name || input.companyName || `Researched Company ${index + 1}`);
   const factors = factorKeys.reduce<Record<FactorKey, number>>((scores, key) => {
     const rawFactors = input.factors as Record<string, unknown> | undefined;
     scores[key] = clampScore(rawFactors?.[key], 5);
@@ -74,7 +73,7 @@ function normalizeCompany(input: Record<string, unknown>, index: number): Compan
       role: String((input.director as Record<string, unknown> | undefined)?.role || "Director"),
       education: String((input.director as Record<string, unknown> | undefined)?.education || "NA"),
       directorships: Number((input.director as Record<string, unknown> | undefined)?.directorships || 0),
-      credibility: String((input.director as Record<string, unknown> | undefined)?.credibility || "AI research pending verification"),
+      credibility: String((input.director as Record<string, unknown> | undefined)?.credibility || "Research pending verification"),
     },
     factors,
     competitors: Array.isArray(input.competitors)
@@ -95,34 +94,8 @@ function buildSearchQuery(body: SearchBody) {
   return parts.join(" ");
 }
 
-async function tavilySearch(query: string) {
-  const apiKey = envValue("TAVILY_API_KEY");
-  if (!apiKey) return [];
-
-  const response = await fetch(tavilyUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      api_key: apiKey,
-      query,
-      search_depth: "advanced",
-      include_answer: false,
-      include_raw_content: false,
-      max_results: 8,
-    }),
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Tavily search failed with ${response.status}`);
-  }
-
-  const data = (await response.json()) as { results?: SearchResult[] };
-  return data.results ?? [];
-}
-
 function sourceContext(results: SearchResult[]) {
-  if (!results.length) return "No live feed results returned.";
+  if (!results.length) return "Dashboard public search is disabled. Use uploaded/parser data and mark unavailable fields as NA.";
   return results
     .map((item, index) => {
       return [
@@ -134,6 +107,15 @@ function sourceContext(results: SearchResult[]) {
     .join("\n\n");
 }
 
+function cleanProviderDetails(message: string) {
+  return message
+    .replace(/\bGroq\b/gi, "analysis service")
+    .replace(/\bTavily\b/gi, "live feed")
+    .replace(/\bGemini\b/gi, "analysis service")
+    .replace(/\bOpenRouter\b/gi, "analysis service")
+    .replace(/No AI provider configured\.[^|]*/gi, "Analysis service is not configured.");
+}
+
 async function groqAnalyze(body: SearchBody, results: SearchResult[]) {
   const prompt = `You are Scout Smarter, an unlisted-company origination analyst.
 
@@ -143,11 +125,11 @@ SEARCH REQUEST
 - City: ${body.city || "NA"}
 - State: ${body.state || "NA"}
 
-LIVE FEED RESULTS
+PUBLIC SEARCH CONTEXT
 ${sourceContext(results)}
 
 Task:
-1. Identify real companies relevant to the query/city/state/CIN/name from the feed.
+1. Identify companies relevant to the query/city/state/CIN/name only when the supplied fields or existing context support them.
 2. Prefer active Indian private/public unlisted companies when available.
 3. Generate a concise analyst report with source-aware caveats.
 4. Score every company on these equal factors from 0-10 using this exact logic:
@@ -196,6 +178,14 @@ ${scoringJsonReportFormat}`;
 
   const result = await generateAiText({
     task: "company-search",
+    provider: "groq",
+    apiKey:
+      envValue("CDR_OTHER_COMPANIES_GROQ_API_KEY") ||
+      envValue("GROQ_API_KEY_CDR_OTHER_COMPANIES") ||
+      envValue("CDR_COMPREHENSIVE_CDR_GROQ_API_KEY") ||
+      envValue("GROQ_API_KEY_CDR_COMPREHENSIVE_CDR") ||
+      envValue("GROQ_API_KEY"),
+    providerLabel: "Other Companies",
     system: "Return only valid JSON. You are careful, source-aware, and mark missing information as NA.",
     prompt,
     temperature: 0.12,
@@ -219,8 +209,8 @@ ${scoringJsonReportFormat}`;
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as SearchBody;
-    const query = buildSearchQuery(body);
-    const results = await tavilySearch(query);
+    buildSearchQuery(body);
+    const results: SearchResult[] = [];
     const analysis = await groqAnalyze(body, results);
 
     return NextResponse.json({
@@ -230,7 +220,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "AI search failed" },
+      { error: error instanceof Error ? cleanProviderDetails(error.message) : "Company research failed" },
       { status: 500 },
     );
   }

@@ -14,7 +14,7 @@ export function GlassPanel({
 }) {
   return (
     <section
-      className={`rounded-2xl border border-white/50 bg-white/60 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl ${className}`}
+      className={`rounded-2xl border border-amber-400/60 bg-white/60 p-5 shadow-[0_20px_60px_rgba(99,111,45,0.16)] backdrop-blur-xl ${className}`}
     >
       {children}
     </section>
@@ -23,7 +23,7 @@ export function GlassPanel({
 
 export function ScoreBadge({ score }: { score: number }) {
   return (
-    <div className="inline-flex min-w-24 items-center justify-center rounded-2xl border border-white/50 bg-white/55 px-4 py-3 text-center shadow-lg backdrop-blur-xl">
+    <div className="inline-flex min-w-24 items-center justify-center rounded-2xl border border-amber-400/60 bg-white/60 px-4 py-3 text-center shadow-[0_14px_28px_rgba(146,105,21,0.18)] backdrop-blur-xl">
       <span className="text-3xl font-black text-slate-950">{score}</span>
       <span className="ml-1 text-sm font-bold text-slate-800">/100</span>
     </div>
@@ -34,7 +34,7 @@ export function FactorGrid({ company }: { company: Company }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {Object.entries(company.factors).map(([key, value]) => (
-        <div key={key} className="rounded-xl border border-white/40 bg-white/55 p-4 transition">
+        <div key={key} className="rounded-xl border border-amber-400/45 bg-white/55 p-4 shadow-[0_10px_24px_rgba(146,105,21,0.10)] transition">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-bold text-slate-900">
               {factorLabels[key as keyof typeof factorLabels]}
@@ -79,7 +79,7 @@ export function CompanyTable({ limit, companies }: { limit?: number; companies?:
   const visibleCompanies = sourceCompanies.slice(0, limit ?? sourceCompanies.length);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/45 bg-white/55 backdrop-blur-xl">
+    <div className="overflow-hidden rounded-2xl border border-amber-400/60 bg-white/55 backdrop-blur-xl">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1120px] table-fixed text-left">
           <thead>
@@ -137,7 +137,7 @@ export function CompanyTable({ limit, companies }: { limit?: number; companies?:
                             <div className="rounded-xl bg-white/55 p-4">
                               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-700">IPO Readiness</p>
                               <p className="mt-2 text-lg font-black text-slate-950">{company.ipoReadinessBand || "Pending"}</p>
-                              <p className="mt-2 text-sm font-semibold leading-6 text-slate-800">{company.ipoReadinessMessage || company.aiScoringError || "AI scoring is pending."}</p>
+                              <p className="mt-2 text-sm font-semibold leading-6 text-slate-800">{company.ipoReadinessMessage || company.aiScoringError || "Scoring is pending."}</p>
                             </div>
                             <div className="rounded-xl bg-white/55 p-4">
                               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-700">Flags</p>

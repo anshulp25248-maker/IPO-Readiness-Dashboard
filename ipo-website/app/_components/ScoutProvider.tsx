@@ -386,7 +386,7 @@ async function scoreCompanyViaApi(company: Company, weights: FactorWeights) {
     body: JSON.stringify({ company, weights }),
   });
   const data = (await response.json()) as { company?: Company; insight?: AiCompanyInsight; error?: string };
-  if (!response.ok) throw new Error(data.error || "AI scoring failed.");
+  if (!response.ok) throw new Error(data.error || "Scoring failed.");
   return data;
 }
 
@@ -403,7 +403,7 @@ async function scoreCompaniesViaApi(companies: Company[], weights: FactorWeights
     aiLanes?: Record<string, number>;
     error?: string;
   };
-  if (!response.ok) throw new Error(data.error || "AI batch scoring failed.");
+  if (!response.ok) throw new Error(data.error || "Batch scoring failed.");
   return data;
 }
 
@@ -501,9 +501,9 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     setAiScoreReport("");
     setAiCompanyInsights({});
     setUploadStatus(
-      `Parser complete. ${parser.summary.rejectedTotal} rejected (${parser.summary.rejectedCapital} capital, ${parser.summary.rejectedCommunityService} community service, ${parser.summary.rejectedGovernment} government), ${parser.summary.passingToAi} passing to AI screening.`,
+      `Parser complete. ${parser.summary.rejectedTotal} rejected (${parser.summary.rejectedCapital} capital, ${parser.summary.rejectedCommunityService} community service, ${parser.summary.rejectedGovernment} government), ${parser.summary.passingToAi} passing to screening.`,
     );
-    setScoringStatus("Parser complete. Proceeding to AI screening now.");
+    setScoringStatus("Parser complete. Proceeding to screening now.");
     await runAiScreening(initialPassing, factorWeights, parser.rejected);
   }
 
@@ -524,7 +524,7 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
 
   async function runAiScreening(companyList: Company[], weights: FactorWeights, rejectedCompanies: Company[] = []) {
     if (!companyList.length) {
-      setScoringStatus("No companies passed the parser into AI screening.");
+      setScoringStatus("No companies passed the parser into screening.");
       return;
     }
     setAiProgress({ total: companyList.length, completed: 0, running: true });
@@ -534,7 +534,7 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     const scoredCompanies: Company[] = [];
 
     try {
-      setScoringStatus(`Initial Investment Layer started. Dividing ${companyList.length} companies across 5 Groq AIs.`);
+      setScoringStatus(`Initial Investment Layer started for ${companyList.length} companies.`);
       const data = await scoreCompaniesViaApi(companyList, weights);
       (data.companies ?? []).forEach((company) => {
         const scored = recomputeCompanyScore(company, weights);
@@ -547,7 +547,7 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
         current.map((item) => scoredCompanies.find((company) => company.id === item.id) ?? item),
       );
       setAiProgress({ total: companyList.length, completed: scoredCompanies.length, running: false });
-      setScoringStatus(`AI screening complete. 5 Groq AI lanes processed ${scoredCompanies.length} companies.`);
+      setScoringStatus(`Screening complete. ${scoredCompanies.length} companies processed.`);
     } catch {
       let completed = 0;
 
@@ -568,14 +568,14 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
                 adjustedScore: null,
                 compositeScore: null,
                 aiScoringError:
-                  error instanceof Error ? error.message : "AI scoring failed for this company. Retry manually or re-upload.",
+                  error instanceof Error ? error.message : "Scoring failed for this company. Retry manually or re-upload.",
               };
               scoredCompanies.push(failed);
               setCompanies((current) => current.map((item) => (item.id === failed.id ? failed : item)));
             } finally {
               completed += 1;
               setAiProgress({ total: companyList.length, completed, running: completed < companyList.length });
-              setScoringStatus(`AI screening ${completed} of ${companyList.length} companies`);
+              setScoringStatus(`Screening ${completed} of ${companyList.length} companies`);
             }
           }),
         );
@@ -594,9 +594,9 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     const redAttention = scoredCompanies.filter((company) => (company.redFlags?.length ?? 0) > 0).length;
     setAiProgress({ total: companyList.length, completed: companyList.length, running: false });
     setAiScoreReport(
-      `AI screening complete. ${scoredCompanies.length} companies scored and ready. ${redAttention} require attention (Red Flags). ${ready} IPO Ready. ${near} Near Ready. ${development} Development Stage. ${notRecommended} Not Recommended.`,
+      `Screening complete. ${scoredCompanies.length} companies scored and ready. ${redAttention} require attention (Red Flags). ${ready} IPO Ready. ${near} Near Ready. ${development} Development Stage. ${notRecommended} Not Recommended.`,
     );
-    setScoringStatus("AI screening complete. Results are sorted by adjusted composite score and flags.");
+    setScoringStatus("Screening complete. Results are sorted by adjusted composite score and flags.");
   }
 
   async function runScoring() {
@@ -614,7 +614,7 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     setFactorWeights(pendingFactorWeights);
 
     if (!scorableCompanies.length) {
-      setScoringStatus("No companies are available for AI scoring.");
+      setScoringStatus("No companies are available for scoring.");
       setAiProgress({ total: 0, completed: 0, running: false });
       return;
     }
@@ -623,7 +623,7 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     setCompanies((current) =>
       current.map((company) => preparedCompanies.find((updated) => updated.id === company.id) ?? company),
     );
-    setScoringStatus(`AI scoring started for ${preparedCompanies.length} companies.`);
+    setScoringStatus(`Scoring started for ${preparedCompanies.length} companies.`);
     await runAiScreening(preparedCompanies, pendingFactorWeights, rejectedCompanies);
   }
 
@@ -635,7 +635,7 @@ export function ScoutProvider({ children }: { children: React.ReactNode }) {
     setUploadStatus(message);
     setAiScoreReport("");
     setAiCompanyInsights({});
-    setScoringStatus("AI feed loaded into Scout V2 parser rules. Press Run Scoring to recalculate weights.");
+    setScoringStatus("Live feed loaded into Scout V2 parser rules. Press Run Scoring to recalculate weights.");
   }
 
   function resetCompanies() {

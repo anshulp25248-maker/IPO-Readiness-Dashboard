@@ -4,11 +4,11 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Smart Scouter",
     short_name: "Smart Scouter",
-    description: "An AI Powered Company Search Engine",
+    description: "Company Search and Investment Readiness Engine",
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: "#7dd3fc",
+    background_color: "#dfe9b8",
     theme_color: "#0f172a",
     orientation: "portrait-primary",
     categories: ["business", "finance", "productivity"],

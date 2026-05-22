@@ -74,7 +74,7 @@ const cdrTabs = [
     description: "Generate and export one detailed CDR built from all five section-specific CDR lanes.",
     sections: [
       "Sector, industry, competitor, director, and company sections",
-      "Same section-specific Groq and Tavily keys",
+      "Dedicated research and analysis lanes for each section",
       "Bold short headers with detailed body text",
       "Red formatting for risk flags",
       "Source feed appendix",
@@ -133,6 +133,14 @@ export default function CdrPage() {
   const [selectedCompanyId, setSelectedCompanyId] = useState(topCompany.id);
   const [externalCompany, setExternalCompany] = useState<Company | null>(null);
 
+  function cleanStatus(message: string) {
+    return message
+      .replace(/\bGroq\b/gi, "analysis")
+      .replace(/\bTavily\b/gi, "live feed")
+      .replace(/\bGemini\b/gi, "analysis")
+      .replace(/\bOpenRouter\b/gi, "analysis");
+  }
+
   const searchResults = useMemo(() => {
     const search = cdrSearch.trim().toLowerCase();
     if (!search) return rankedCompanies.slice(0, 6);
@@ -164,8 +172,8 @@ export default function CdrPage() {
     setIsGenerating(true);
     setStatus(
       activeTab === "docx-generation"
-        ? "Generating the full CDR from all section-specific Groq and Tavily lanes..."
-        : `Generating real-time ${activeSpec.label} with its Groq and Tavily lane...`,
+        ? "Generating the full CDR from all section-specific research and analysis lanes..."
+        : `Generating real-time ${activeSpec.label} with its dedicated research and analysis lane...`,
     );
     setReport("");
     setSources([]);
@@ -192,10 +200,10 @@ export default function CdrPage() {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      const detail = message && !message.includes("CDR generation failed") ? ` Details: ${message.slice(0, 180)}` : "";
+      const detail = message && !message.includes("CDR generation failed") ? ` Details: ${cleanStatus(message).slice(0, 180)}` : "";
       setStatus(
         message.includes("429")
-          ? "AI report generation is temporarily rate-limited. Please retry after a short while."
+          ? "Report generation is temporarily rate-limited. Please retry after a short while."
           : `${activeSpec.label} could not be completed. Please retry with the same company.${detail}`,
       );
     } finally {
@@ -257,6 +265,25 @@ export default function CdrPage() {
                 placeholder="Enter CIN or company name"
                 className="h-12 rounded-xl border border-white/45 bg-white/65 px-4 font-mono text-sm font-bold text-slate-950 outline-none focus:ring-4 focus:ring-white/50"
               />
+            </label>
+            <label className="mt-3 grid gap-2">
+              <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-800/70">
+                Choose From All Parsed Companies
+              </span>
+              <select
+                value={externalCompany ? "" : selectedCompanyId}
+                onChange={(event) => {
+                  setSelectedCompanyId(event.target.value);
+                  setExternalCompany(null);
+                }}
+                className="h-12 rounded-xl border border-amber-400/55 bg-white/65 px-4 text-sm font-bold text-slate-950 shadow-inner outline-none focus:ring-4 focus:ring-white/50"
+              >
+                {rankedCompanies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.name} - {company.cin}
+                  </option>
+                ))}
+              </select>
             </label>
             <div className="mt-3 grid gap-2">
               {searchResults.map((company) => (
@@ -363,40 +390,38 @@ export default function CdrPage() {
               {status}
             </p>
           ) : null}
-        </GlassPanel>
-      </div>
 
-      {report ? (
-        <GlassPanel className="mt-5">
-          <div className="grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
-            <article className="max-h-[760px] overflow-y-auto rounded-2xl border border-white/35 bg-white/35 p-4 shadow-inner">
-              <ReportViewer report={report} />
-            </article>
-            <div className="rounded-2xl border border-white/35 bg-white/45 p-4">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-800/70">
-                Live Feed Sources
-              </p>
-              <div className="mt-3 grid gap-2">
-                {sources.length ? (
-                  sources.slice(0, 8).map((source, index) => (
-                    <a
-                      key={`${source.url || source.title}-${index}`}
-                      href={source.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-xl bg-white/55 px-3 py-2 text-xs font-bold leading-5 text-indigo-950 transition hover:bg-white/80"
-                    >
-                      {source.title || source.url || "Source"}
-                    </a>
-                  ))
-                ) : (
-                  <p className="text-sm font-semibold text-slate-800">No live sources returned.</p>
-                )}
+          {report ? (
+            <div className="mt-5 grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
+              <article className="max-h-[760px] overflow-y-auto rounded-2xl border border-amber-400/45 bg-white/40 p-4 shadow-inner">
+                <ReportViewer report={report} />
+              </article>
+              <div className="rounded-2xl border border-amber-400/45 bg-white/50 p-4">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-800/70">
+                  Live Feed Sources
+                </p>
+                <div className="mt-3 grid gap-2">
+                  {sources.length ? (
+                    sources.slice(0, 8).map((source, index) => (
+                      <a
+                        key={`${source.url || source.title}-${index}`}
+                        href={source.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-xl bg-white/55 px-3 py-2 text-xs font-bold leading-5 text-indigo-950 transition hover:bg-white/80"
+                      >
+                        {source.title || source.url || "Source"}
+                      </a>
+                    ))
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-800">No live sources returned.</p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          ) : null}
         </GlassPanel>
-      ) : null}
+      </div>
     </AppShell>
   );
 }

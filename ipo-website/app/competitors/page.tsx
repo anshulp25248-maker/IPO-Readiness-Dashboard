@@ -8,14 +8,16 @@ import { useScout } from "../_components/ScoutProvider";
 
 export default function CompetitorsPage() {
   const { rankedCompanies, topCompany } = useScout();
-  const [status, setStatus] = useState("Ready to analyze competitors for the top company.");
+  const [selectedCompanyId, setSelectedCompanyId] = useState(topCompany.id);
+  const selectedCompany = rankedCompanies.find((company) => company.id === selectedCompanyId) || topCompany;
+  const [status, setStatus] = useState("Ready to analyze competitors for the selected company.");
   const [report, setReport] = useState("");
   const [sources, setSources] = useState<Array<{ title?: string; url?: string }>>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
   async function generateCompetitors() {
     setIsGenerating(true);
-    setStatus("Searching uploaded list and live competitor feeds...");
+    setStatus("Analyzing uploaded peer universe and company factors...");
     setReport("");
     setSources([]);
 
@@ -23,7 +25,7 @@ export default function CompetitorsPage() {
       const response = await fetch("/api/competitor-research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: topCompany, peers: rankedCompanies.slice(0, 300) }),
+        body: JSON.stringify({ company: selectedCompany, peers: rankedCompanies }),
       });
       const data = (await response.json()) as {
         report?: string;
@@ -34,7 +36,7 @@ export default function CompetitorsPage() {
       if (!response.ok) throw new Error(data.error || "Competitor research failed.");
       setReport(data.report || "No competitor report returned.");
       setSources(data.sources || []);
-      setStatus(`Competitor diligence generated. ${data.peerCount ?? 0} uploaded peers matched by sector/NIC/activity.`);
+      setStatus("Competitor diligence generated from uploaded peers and AI analysis.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Competitor research failed.");
     } finally {
@@ -47,9 +49,9 @@ export default function CompetitorsPage() {
       <GlassPanel className="mb-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">AI Competitor Diligence</p>
-            <h2 className="mt-2 font-serif text-4xl font-bold text-slate-950">{topCompany.name}</h2>
-            <p className="mt-2 text-sm font-semibold text-slate-800">{topCompany.activity}</p>
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">Competitor Diligence</p>
+            <h2 className="mt-2 font-serif text-4xl font-bold text-slate-950">{selectedCompany.name}</h2>
+            <p className="mt-2 text-sm font-semibold text-slate-800">{selectedCompany.activity}</p>
           </div>
           <button
             type="button"
@@ -60,6 +62,27 @@ export default function CompetitorsPage() {
             {isGenerating ? "Generating..." : "Generate Competitor Report"}
           </button>
         </div>
+        <label className="mt-5 grid gap-2">
+          <span className="text-xs font-black uppercase tracking-[0.18em] text-slate-800/70">
+            Choose Company
+          </span>
+          <select
+            value={selectedCompany.id}
+            onChange={(event) => {
+              setSelectedCompanyId(event.target.value);
+              setReport("");
+              setSources([]);
+              setStatus("Ready to analyze competitors for the selected company.");
+            }}
+            className="h-12 rounded-xl border border-amber-400/55 bg-white/60 px-4 text-sm font-bold text-slate-950 shadow-inner outline-none transition focus:ring-4 focus:ring-white/50"
+          >
+            {rankedCompanies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.name} - {company.cin}
+              </option>
+            ))}
+          </select>
+        </label>
         <p className="mt-4 rounded-xl bg-white/45 px-4 py-3 text-sm font-bold text-slate-900">{status}</p>
         {report ? (
           <div className="mt-4 grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">

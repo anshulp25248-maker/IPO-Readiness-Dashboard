@@ -5,28 +5,13 @@ import { investmentBankingReportFormat } from "../_lib/report-format";
 
 export const runtime = "nodejs";
 
-type SearchResult = { title?: string; url?: string; content?: string };
-
-const tavilyUrl = "https://api.tavily.com/search";
-
-async function tavilySearch(query: string) {
-  const apiKey = envValue("TAVILY_API_KEY");
-  if (!apiKey) return [];
-  const response = await fetch(tavilyUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ api_key: apiKey, query, search_depth: "advanced", max_results: 10 }),
-    cache: "no-store",
-  });
-  if (!response.ok) throw new Error(`Tavily director search failed with ${response.status}`);
-  const data = (await response.json()) as { results?: SearchResult[] };
-  return data.results ?? [];
-}
-
-function sourceContext(results: SearchResult[]) {
-  return results
-    .map((item, index) => `${index + 1}. ${item.title || "Untitled"}\nURL: ${item.url || "NA"}\nSnippet: ${(item.content || "").slice(0, 750)}`)
-    .join("\n\n") || "No public feed results returned.";
+function cleanProviderDetails(message: string) {
+  return message
+    .replace(/\bGroq\b/gi, "analysis service")
+    .replace(/\bTavily\b/gi, "live feed")
+    .replace(/\bGemini\b/gi, "analysis service")
+    .replace(/\bOpenRouter\b/gi, "analysis service")
+    .replace(/No AI provider configured\.[^|]*/gi, "Analysis service is not configured.");
 }
 
 export async function POST(request: Request) {
@@ -35,15 +20,10 @@ export async function POST(request: Request) {
     const target = company?.cin || cin || company?.name || "";
     if (!target) return NextResponse.json({ error: "Provide a company or CIN." }, { status: 400 });
 
-    const query = `${company?.name || ""} ${target} directors DIN MCA Zauba Tofler LinkedIn founder promoter directorships education`;
-    const results = await tavilySearch(query);
-    const prompt = `Prepare director diligence for this company/CIN. Use public feed results only. You may reference MCA, Zauba, Tofler, LinkedIn public snippets, news, and official pages if returned. Do not scrape private LinkedIn content. Do not hallucinate.
+    const prompt = `Prepare director diligence for this company/CIN from uploaded/parser data and the supplied company fields. Do not hallucinate. Mark unavailable public facts as Data Not Available.
 
 COMPANY DATA
 ${JSON.stringify(company || { cin }, null, 2)}
-
-PUBLIC FEED
-${sourceContext(results)}
 
 ${investmentBankingReportFormat}
 
@@ -51,6 +31,9 @@ Write the director report with these major section headings and detailed paragra
 
     const ai = await generateAiText({
       task: "director",
+      provider: "groq",
+      apiKey: envValue("CDR_DIRECTOR_PROFILE_GROQ_API_KEY") || envValue("GROQ_API_KEY_CDR_DIRECTOR_PROFILE") || envValue("GROQ_API_KEY"),
+      providerLabel: "Director Profile",
       system: "You are a cautious investment-banking KYC and promoter diligence analyst. Separate facts from inference.",
       prompt,
       temperature: 0.1,
@@ -59,11 +42,11 @@ Write the director report with these major section headings and detailed paragra
 
     return NextResponse.json({
       report: ai.text || "No director research returned.",
-      sources: results.map((item) => ({ title: item.title, url: item.url })),
+      sources: [],
       provider: ai.provider,
       model: ai.model,
     });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Director research failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? cleanProviderDetails(error.message) : "Director research failed." }, { status: 500 });
   }
 }

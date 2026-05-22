@@ -25,7 +25,7 @@ export default function Top10CompaniesPage() {
   const [aiCin, setAiCin] = useState("");
   const [aiReport, setAiReport] = useState("");
   const [aiSources, setAiSources] = useState<Array<{ title?: string; url?: string }>>([]);
-  const [aiStatus, setAiStatus] = useState("Ready for AI company search.");
+  const [aiStatus, setAiStatus] = useState("Ready for company research.");
   const [isSearching, setIsSearching] = useState(false);
 
   const cities = useMemo(
@@ -52,7 +52,7 @@ export default function Top10CompaniesPage() {
 
   async function runAiSearch() {
     setIsSearching(true);
-    setAiStatus("Searching live feeds and generating AI analysis...");
+    setAiStatus("Generating company analysis from the supplied query and AI model...");
     setAiReport("");
     setAiSources([]);
 
@@ -71,30 +71,30 @@ export default function Top10CompaniesPage() {
       const data = (await response.json()) as AiSearchResponse;
 
       if (!response.ok) {
-        throw new Error(data.error || "AI search failed.");
+        throw new Error(data.error || "Company research failed.");
       }
 
       const companies = data.companies || [];
       if (companies.length) {
         replaceCompanies(
           companies,
-          `${companies.length} AI feed companies loaded. Use drawer factors and Run Scoring to rescore.`,
+          `${companies.length} AI-researched companies loaded. Use drawer factors and Run Scoring to rescore.`,
         );
         setAiStatus(`${companies.length} companies found and loaded into the dashboard workspace.`);
       } else {
-        setAiStatus("AI search completed but no company candidates were found.");
+        setAiStatus("Company research completed but no company candidates were found.");
       }
       setAiReport(data.report || "No report returned.");
       setAiSources(data.sources || []);
     } catch (error) {
-      setAiStatus(error instanceof Error ? error.message : "AI search failed.");
+      setAiStatus(error instanceof Error ? error.message : "Company research failed.");
     } finally {
       setIsSearching(false);
     }
   }
 
   return (
-    <AppShell title="Top 10 Companies">
+    <AppShell title="Other Companies">
       <GlassPanel>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -112,7 +112,7 @@ export default function Top10CompaniesPage() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">
-                AI + Feed Parser
+                Research + Feed Parser
               </p>
               <h3 className="mt-2 font-serif text-3xl font-bold text-slate-950">
                 Search real-time company feeds
@@ -124,7 +124,7 @@ export default function Top10CompaniesPage() {
               disabled={isSearching}
               className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-indigo-950 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSearching ? "Searching..." : "Generate AI Report"}
+              {isSearching ? "Searching..." : "Generate Company Report"}
             </button>
           </div>
 
@@ -186,7 +186,7 @@ export default function Top10CompaniesPage() {
               </article>
               <div className="rounded-2xl border border-white/40 bg-white/55 p-4">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-800/70">
-                  Feed Sources
+                  Sources
                 </p>
                 <div className="mt-3 grid gap-2">
                   {aiSources.slice(0, 6).map((source, index) => (

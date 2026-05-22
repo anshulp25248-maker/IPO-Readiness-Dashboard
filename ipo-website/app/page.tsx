@@ -7,7 +7,7 @@ import { useScout } from "./_components/ScoutProvider";
 const primaryCards = [
   { title: "Dashboard", href: "/dashboard", icon: "dashboard" },
   { title: "CDR", href: "/cdr", icon: "report" },
-  { title: "Top 10 Companies", href: "/top-10-companies", icon: "ranking" },
+  { title: "Other Companies", href: "/top-10-companies", icon: "ranking" },
 ] as const;
 
 const secondaryCards = [
@@ -36,7 +36,7 @@ function HamburgerButton() {
 
 export default function SmartScouterHome() {
   return (
-    <main className="relative flex min-h-screen overflow-x-hidden bg-[linear-gradient(135deg,rgba(125,211,252,0.76),rgba(153,246,228,0.72),rgba(220,252,231,0.76))] px-4 py-8 text-slate-950 sm:px-8 sm:py-10">
+    <main className="relative flex min-h-screen overflow-x-hidden bg-[linear-gradient(135deg,rgba(188,214,144,0.82),rgba(221,236,184,0.78),rgba(239,243,209,0.82))] px-4 py-8 text-slate-950 sm:px-8 sm:py-10">
       <Drawer />
       <HamburgerButton />
 
@@ -46,7 +46,7 @@ export default function SmartScouterHome() {
             Smart Scouter
           </h1>
           <p className="text-base font-medium text-slate-800/80 sm:text-xl">
-            An AI Powered Company Search Engine
+            Company Search and Investment Readiness Engine
           </p>
         </header>
 

@@ -50,61 +50,19 @@ const factorMap: Record<string, FactorKey> = {
   geography: "geography",
 };
 
-const tavilyUrl = "https://api.tavily.com/search";
-
-async function tavilySearch(query: string, maxResults = 5) {
-  const apiKey = envValue("TAVILY_API_KEY");
-  if (!apiKey) return { results: [], status: "Tavily is not configured." };
-  const response = await fetch(tavilyUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      api_key: apiKey,
-      query,
-      search_depth: "advanced",
-      include_answer: false,
-      include_raw_content: false,
-      max_results: maxResults,
-    }),
-    cache: "no-store",
-  });
-  if (!response.ok) throw new Error(`Tavily search failed with ${response.status}`);
-  const data = (await response.json()) as { results?: SearchResult[] };
-  return { results: data.results ?? [], status: `Tavily returned ${(data.results ?? []).length} snippets.` };
+function cleanProviderDetails(message: string) {
+  return message
+    .replace(/\bGroq\b/gi, "analysis service")
+    .replace(/\bTavily\b/gi, "live feed")
+    .replace(/\bGemini\b/gi, "analysis service")
+    .replace(/\bOpenRouter\b/gi, "analysis service")
+    .replace(/No AI provider configured\.[^|]*/gi, "Analysis service is not configured.");
 }
 
 async function searchCompany(company: Company) {
-  const sectorTerms = `${company.sector} ${company.nicCode} ${company.activity}`.trim();
-  const queries = [
-    `${company.name} ${company.cin} MCA status active Zauba Tofler`,
-    `${company.name} ${company.cin} site:zaubacorp.com company status directors filing`,
-    `${company.name} ${company.cin} site:tofler.in company status financials directors`,
-    `${company.name} ${company.cin} MCA company master data annual filing`,
-    `${sectorTerms} India sector report latest growth forecast PLI SME IPO`,
-    `${sectorTerms} India thematic report market size CAGR outlook`,
-  ].filter((query) => query.length > 20);
-
-  const batches = await Promise.all(
-    queries.map((query) =>
-      tavilySearch(query).catch((error) => ({
-        results: [],
-        status: error instanceof Error ? error.message : "Search failed.",
-      })),
-    ),
-  );
-  const seen = new Set<string>();
-  const results = batches
-    .flatMap((batch) => batch.results)
-    .filter((item) => {
-      const key = item.url || `${item.title}-${item.content}`;
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, 14);
   return {
-    results,
-    status: results.length ? `Public feed returned ${results.length} snippets.` : batches.map((item) => item.status).join(" | "),
+    results: [] as SearchResult[],
+    status: `Dashboard public search disabled for ${company.name}; scoring uses uploaded/parser data and AI analysis only.`,
   };
 }
 
@@ -113,7 +71,7 @@ function sourceContext(results: SearchResult[]) {
     results
       .slice(0, 12)
       .map((item, index) => `${index + 1}. ${item.title || "Untitled"}\nURL: ${item.url || "NA"}\nSnippet: ${(item.content || "").slice(0, 500)}`)
-      .join("\n\n") || "No public feed results returned."
+      .join("\n\n") || "Dashboard public search is disabled. Use uploaded/parser data only and mark unverifiable public facts as NA."
   );
 }
 
@@ -209,7 +167,7 @@ function normalizeAiCompany(company: Company, weights: FactorWeights, ai: AiScor
   );
   const band = normalizeBand(ai.ipo_readiness_band, adjustedScore, uniqueRedFlags, yellowFlags);
   const statusVerification = {
-    source: ai.status_verification?.source || "Public feed / AI search",
+    source: ai.status_verification?.source || "Uploaded/parser data",
     statusFound: ai.status_verification?.status_found || (ai.status_verification?.rf09_applied ? "Unverified" : "Active or not contradicted"),
     verifiedActive: Boolean(ai.status_verification?.verified_active),
     rf08Applied: Boolean(ai.status_verification?.rf08_applied),
@@ -275,18 +233,18 @@ Filing Compliance: ${weights.filingCompliance}%
 Auth/Paid-up Ratio: ${weights.capitalRatio}%
 Geography: ${weights.geography}%
 
-PUBLIC FEED STATUS:
+PUBLIC SEARCH STATUS:
 ${sourceStatus}
 
-PUBLIC FEED:
+PUBLIC SEARCH CONTEXT:
 ${publicFeed}
 
 PARSER PREFILTER:
 This company has already passed parser screening for minimum paid-up capital of Rs 5 lakh and has not been classified by the parser as a community-service, NGO, trust, society, welfare, non-profit, government, municipal, public-sector, authority, or state-owned profile. If public evidence contradicts this, flag the contradiction in status_verification and red_flags/yellow_flags.
 
 TASKS:
-1. Use the public feed as the search evidence for Zauba Corp, Tofler, MCA portal, and sector/thematic reports.
-2. Verify whether the company appears Active, Non-Active, or Unverified. If no source verifies status, apply RF-09 only.
+1. Use uploaded/parser fields as the scoring source of truth. Do not invent Zauba, Tofler, MCA, or sector-report facts.
+2. Verify whether the uploaded/parser data supports Active, Non-Active, or Unverified status. If no source verifies status, apply RF-09 only.
 3. Apply sector cluster geography validation using NIC code.
 4. Score all seven factors using the Scout Smarter V2 investment rules.
 5. Detect all red flags and yellow flags.
@@ -333,7 +291,7 @@ async function aiScore(
     task: "scoring",
     provider: "groq",
     apiKey: groqApiKey,
-    providerLabel: typeof laneIndex === "number" ? `Groq AI ${laneIndex + 1}` : "Groq",
+    providerLabel: typeof laneIndex === "number" ? `Scoring lane ${laneIndex + 1}` : "Scoring lane",
     system:
       "You are an expert investment screening analyst for a SEBI-registered Category I AIF focused on SME IPO and Pre-IPO equity in India. You have deep knowledge of MCA company data, SEBI listing requirements, BSE SME and NSE Emerge eligibility criteria, Indian sector dynamics, NIC code mapping, and investment due diligence standards. Score objectively. Flag ruthlessly. Never miss a red flag to make a score look better. Your output will be used by an investment committee. Return ONLY valid JSON. No preamble. No explanation outside the JSON structure. No markdown backticks.",
     prompt: buildPrompt(company, weights, publicFeed, sourceStatus),
@@ -372,14 +330,14 @@ async function scoreCompanyForResponse(
       ...scored,
       statusVerification: {
         source: "Fallback deterministic scoring",
-        statusFound: sourceStatus || "AI unavailable",
+        statusFound: sourceStatus || "Analysis unavailable",
         verifiedActive: false,
         rf08Applied: false,
         rf09Applied: !results.length,
         checkedAt: new Date().toISOString().slice(0, 10),
       },
       redFlags: [...new Set([...(scored.redFlags ?? []), ...(!results.length ? ["RF-09"] : [])])],
-      aiScoringError: error instanceof Error ? error.message : "AI provider returned invalid scoring JSON.",
+      aiScoringError: error instanceof Error ? cleanProviderDetails(error.message) : "Analysis returned invalid scoring JSON.",
     };
     scored = {
       ...scored,
@@ -450,7 +408,7 @@ export async function POST(request: Request) {
           lanes[item.company.id] = item.aiLane;
           return lanes;
         }, {}),
-        provider: "Groq",
+        provider: "Scoring",
         model: envValue("GROQ_MODEL_SCORING") || envValue("GROQ_MODEL") || "llama-3.1-8b-instant",
       });
     }
@@ -469,6 +427,6 @@ export async function POST(request: Request) {
       aiLane: result.aiLane,
     });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "AI scoring layer failed." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? cleanProviderDetails(error.message) : "Scoring layer failed." }, { status: 500 });
   }
 }
