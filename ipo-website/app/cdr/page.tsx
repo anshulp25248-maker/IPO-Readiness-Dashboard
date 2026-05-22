@@ -83,6 +83,27 @@ const cdrTabs = [
 ] as const;
 
 type CdrTabKey = (typeof cdrTabs)[number]["key"];
+type CdrTabState = {
+  report: string;
+  sources: Array<{ title?: string; url?: string }>;
+  status: string;
+  isGenerating: boolean;
+};
+
+function makeInitialCdrState(): Record<CdrTabKey, CdrTabState> {
+  return cdrTabs.reduce(
+    (states, tab) => {
+      states[tab.key] = {
+        report: "",
+        sources: [],
+        status: "Ready to generate CDR from uploaded MCA data and live feed evidence.",
+        isGenerating: false,
+      };
+      return states;
+    },
+    {} as Record<CdrTabKey, CdrTabState>,
+  );
+}
 
 function makeCinOnlyCompany(cin: string): Company {
   const cleanCin = cin.trim().toUpperCase();
@@ -123,10 +144,7 @@ function makeCinOnlyCompany(cin: string): Company {
 
 export default function CdrPage() {
   const { topCompany, rankedCompanies, scoreCompany } = useScout();
-  const [report, setReport] = useState("");
-  const [sources, setSources] = useState<Array<{ title?: string; url?: string }>>([]);
-  const [status, setStatus] = useState("Ready to generate CDR from uploaded MCA data and live feed evidence.");
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [cdrState, setCdrState] = useState<Record<CdrTabKey, CdrTabState>>(makeInitialCdrState);
   const [internalInfo, setInternalInfo] = useState("");
   const [cdrSearch, setCdrSearch] = useState("");
   const [activeTab, setActiveTab] = useState<CdrTabKey>("sector-analysis");
@@ -154,12 +172,22 @@ export default function CdrPage() {
   }, [externalCompany, rankedCompanies, selectedCompanyId, topCompany]);
 
   const activeSpec = useMemo(() => cdrTabs.find((tab) => tab.key === activeTab) || cdrTabs[0], [activeTab]);
+  const activeState = cdrState[activeTab];
+  const { report, sources, status, isGenerating } = activeState;
+
+  function updateTabState(tabKey: CdrTabKey, updates: Partial<CdrTabState>) {
+    setCdrState((current) => ({
+      ...current,
+      [tabKey]: {
+        ...current[tabKey],
+        ...updates,
+      },
+    }));
+  }
 
   useEffect(() => {
-    setReport("");
-    setSources([]);
-    setStatus("Ready to generate CDR from uploaded MCA data and live feed evidence.");
-  }, [selectedCompany.id, activeTab]);
+    setCdrState(makeInitialCdrState());
+  }, [selectedCompany.id]);
 
   useEffect(() => {
     if (!rankedCompanies.some((company) => company.id === selectedCompanyId)) {
@@ -169,21 +197,27 @@ export default function CdrPage() {
   }, [rankedCompanies, selectedCompanyId, topCompany.id]);
 
   async function generateCdr() {
-    setIsGenerating(true);
-    setStatus(
-      activeTab === "docx-generation"
+    const tabKey = activeTab;
+    const tabSpec = activeSpec;
+    const company = selectedCompany;
+    const companyScore = scoreCompany(company);
+    const reportType = tabKey === "docx-generation" ? "comprehensive-cdr" : tabKey;
+
+    updateTabState(tabKey, {
+      isGenerating: true,
+      report: "",
+      sources: [],
+      status:
+        tabKey === "docx-generation"
         ? "Generating the full CDR from all section-specific research and analysis lanes..."
-        : `Generating real-time ${activeSpec.label} with its dedicated research and analysis lane...`,
-    );
-    setReport("");
-    setSources([]);
+        : `Generating real-time ${tabSpec.label} with its dedicated research and analysis lane. You can switch tabs while this continues...`,
+    });
 
     try {
-      const reportType = activeTab === "docx-generation" ? "comprehensive-cdr" : activeTab;
       const response = await fetch("/api/cdr-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: selectedCompany, score: scoreCompany(selectedCompany), internalInfo, reportType }),
+        body: JSON.stringify({ company, score: companyScore, internalInfo, reportType }),
       });
       const data = (await response.json()) as {
         report?: string;
@@ -191,33 +225,34 @@ export default function CdrPage() {
         error?: string;
       };
       if (!response.ok) throw new Error(data.error || "CDR generation failed.");
-      setReport(data.report || "No CDR report returned.");
-      setSources(data.sources || []);
-      setStatus(
-        activeTab === "docx-generation"
+      updateTabState(tabKey, {
+        report: data.report || "No CDR report returned.",
+        sources: data.sources || [],
+        status:
+          tabKey === "docx-generation"
           ? "Comprehensive CDR generated from all section reports and live feed evidence."
-          : `${activeSpec.label} generated from uploaded data and real-time live feed evidence.`,
-      );
+          : `${tabSpec.label} generated from uploaded data and real-time live feed evidence.`,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       const detail = message && !message.includes("CDR generation failed") ? ` Details: ${cleanStatus(message).slice(0, 180)}` : "";
-      setStatus(
-        message.includes("429")
+      updateTabState(tabKey, {
+        status: message.includes("429")
           ? "Report generation is temporarily rate-limited. Please retry after a short while."
-          : `${activeSpec.label} could not be completed. Please retry with the same company.${detail}`,
-      );
+          : `${tabSpec.label} could not be completed. Please retry with the same company.${detail}`,
+      });
     } finally {
-      setIsGenerating(false);
+      updateTabState(tabKey, { isGenerating: false });
     }
   }
 
   async function downloadDocx() {
     if (!report) {
-      setStatus("Generate the CDR before exporting DOCX.");
+      updateTabState(activeTab, { status: "Generate the CDR before exporting DOCX." });
       return;
     }
 
-    setStatus("Preparing DOCX export...");
+    updateTabState(activeTab, { status: "Preparing DOCX export..." });
     try {
       const response = await fetch("/api/cdr-docx", {
         method: "POST",
@@ -235,9 +270,9 @@ export default function CdrPage() {
       anchor.download = `${selectedCompany.name.replace(/[^a-z0-9]+/gi, "_")}-CDR.docx`;
       anchor.click();
       URL.revokeObjectURL(url);
-      setStatus("DOCX report generated.");
+      updateTabState(activeTab, { status: "DOCX report generated." });
     } catch {
-      setStatus("DOCX export could not be completed. Please retry after generating the CDR.");
+      updateTabState(activeTab, { status: "DOCX export could not be completed. Please retry after generating the CDR." });
     }
   }
 
