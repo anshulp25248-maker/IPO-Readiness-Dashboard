@@ -17,7 +17,7 @@ export default function CompetitorsPage() {
 
   async function generateCompetitors() {
     setIsGenerating(true);
-    setStatus("Analyzing uploaded peer universe and company factors...");
+    setStatus("Running competitor Groq + live-feed lane...");
     setReport("");
     setSources([]);
 
@@ -36,7 +36,7 @@ export default function CompetitorsPage() {
       if (!response.ok) throw new Error(data.error || "Competitor research failed.");
       setReport(data.report || "No competitor report returned.");
       setSources(data.sources || []);
-      setStatus("Competitor diligence generated from uploaded peers and AI analysis.");
+      setStatus("Competitor diligence generated from uploaded peers, Groq analysis, and live-feed evidence.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Competitor research failed.");
     } finally {

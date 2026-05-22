@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { Company, FactorKey } from "../../_data/companies";
 import { envValue, generateAiText } from "../_lib/ai";
+import {
+  dashboardLaneEnvValue,
+  sourceContext,
+  sourceLinks,
+  tavilySearchLane,
+  type SearchResult,
+} from "../_lib/dashboard-research-lanes";
 import { scoringJsonReportFormat } from "../_lib/report-format";
 
 export const runtime = "nodejs";
@@ -11,12 +18,6 @@ type SearchBody = {
   state?: string;
   cin?: string;
   companyName?: string;
-};
-
-type SearchResult = {
-  title?: string;
-  url?: string;
-  content?: string;
 };
 
 const factorKeys: FactorKey[] = [
@@ -94,19 +95,6 @@ function buildSearchQuery(body: SearchBody) {
   return parts.join(" ");
 }
 
-function sourceContext(results: SearchResult[]) {
-  if (!results.length) return "Dashboard public search is disabled. Use uploaded/parser data and mark unavailable fields as NA.";
-  return results
-    .map((item, index) => {
-      return [
-        `${index + 1}. ${item.title || "Untitled"}`,
-        `URL: ${item.url || "NA"}`,
-        `Snippet: ${(item.content || "").slice(0, 650)}`,
-      ].join("\n");
-    })
-    .join("\n\n");
-}
-
 function cleanProviderDetails(message: string) {
   return message
     .replace(/\bGroq\b/gi, "analysis service")
@@ -129,7 +117,7 @@ PUBLIC SEARCH CONTEXT
 ${sourceContext(results)}
 
 Task:
-1. Identify companies relevant to the query/city/state/CIN/name only when the supplied fields or existing context support them.
+1. Identify real companies relevant to the query/city/state/CIN/name from the dedicated Other Companies live-feed lane and supplied fields.
 2. Prefer active Indian private/public unlisted companies when available.
 3. Generate a concise analyst report with source-aware caveats.
 4. Score every company on these equal factors from 0-10 using this exact logic:
@@ -180,6 +168,7 @@ ${scoringJsonReportFormat}`;
     task: "company-search",
     provider: "groq",
     apiKey:
+      dashboardLaneEnvValue("other-companies", "GROQ_API_KEY") ||
       envValue("CDR_OTHER_COMPANIES_GROQ_API_KEY") ||
       envValue("GROQ_API_KEY_CDR_OTHER_COMPANIES") ||
       envValue("CDR_COMPREHENSIVE_CDR_GROQ_API_KEY") ||
@@ -209,13 +198,18 @@ ${scoringJsonReportFormat}`;
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as SearchBody;
-    buildSearchQuery(body);
-    const results: SearchResult[] = [];
+    const query = buildSearchQuery(body);
+    const results = await tavilySearchLane("other-companies", [
+      query,
+      `${body.companyName || body.query || ""} ${body.cin || ""} MCA Zauba Tofler directors financials`,
+      `${body.companyName || body.query || ""} ${body.city || ""} ${body.state || ""} India private limited company`,
+    ]);
     const analysis = await groqAnalyze(body, results);
 
     return NextResponse.json({
       ...analysis,
-      sources: results.map((item) => ({ title: item.title, url: item.url })),
+      sources: sourceLinks(results),
+      lane: "Other Companies",
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {

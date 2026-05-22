@@ -62,10 +62,10 @@ export default function DirectorProfilePage() {
     const key = company?.id || "manual";
     setResearch((current) => ({
       ...current,
-      [key]: { status: "Analyzing uploaded director fields and company factors...", report: "", sources: [] },
+      [key]: { status: "Running director Groq + live-feed lane...", report: "", sources: [] },
     }));
     if (!company) {
-      setManualStatus("Analyzing supplied CIN/company context...");
+      setManualStatus("Running director Groq + live-feed lane...");
       setManualReport("");
     }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Company } from "../../_data/companies";
-import { envValue, generateAiText } from "../_lib/ai";
+import { generateAiText } from "../_lib/ai";
+import { dashboardLaneEnvValue, sourceContext, sourceLinks, tavilySearchLane } from "../_lib/dashboard-research-lanes";
 import { investmentBankingReportFormat } from "../_lib/report-format";
 
 export const runtime = "nodejs";
@@ -24,7 +25,13 @@ export async function POST(request: Request) {
       .filter((peer) => peer.nicCode === company.nicCode || peer.activity === company.activity || peer.sector === company.sector)
       .slice(0, 25);
 
-    const prompt = `Build a competitor and business-model diligence report from uploaded/parser data and the supplied peer universe. Do not invent facts.
+    const results = await tavilySearchLane("competitor-analysis", [
+      `${company.name} ${company.activity} ${company.nicCode} competitors peers India private limited`,
+      `${company.name} similar companies India competitors Zauba Tofler LinkedIn`,
+      `${company.activity} ${company.sector} India listed unlisted competitors market share`,
+    ]);
+
+    const prompt = `Build a competitor and business-model diligence report from uploaded/parser data, the supplied peer universe, and the dedicated Competitor Analysis live-feed lane. Do not invent facts.
 
 TARGET COMPANY
 ${JSON.stringify(company, null, 2)}
@@ -32,14 +39,17 @@ ${JSON.stringify(company, null, 2)}
 SIMILAR COMPANIES FROM UPLOADED LIST
 ${JSON.stringify(similarPeers, null, 2)}
 
+COMPETITOR LIVE FEED
+${sourceContext(results)}
+
 ${investmentBankingReportFormat}
 
-Write the competitor report with these major section headings and detailed paragraphs under each: Business Model Interpretation; Uploaded Peer Universe; Competitive Landscape From Parser Data; Scarcity and Saturation Analysis; Differentiation and Moat; Red Flags and Commoditization Risk; Score Implication; Diligence Questions and Investment View.`;
+Write the competitor report with these major section headings and detailed paragraphs under each: Business Model Interpretation; Uploaded Peer Universe; Public Competitor Landscape; Scarcity and Saturation Analysis; Differentiation and Moat; Red Flags and Commoditization Risk; Score Implication; Diligence Questions and Investment View.`;
 
     const ai = await generateAiText({
       task: "competitor",
       provider: "groq",
-      apiKey: envValue("CDR_COMPETITOR_ANALYSIS_GROQ_API_KEY") || envValue("GROQ_API_KEY_CDR_COMPETITOR_ANALYSIS") || envValue("GROQ_API_KEY"),
+      apiKey: dashboardLaneEnvValue("competitor-analysis", "GROQ_API_KEY"),
       providerLabel: "Competitor Analysis",
       system: "You are a competition and business-model diligence analyst for private-company investing.",
       prompt,
@@ -49,7 +59,8 @@ Write the competitor report with these major section headings and detailed parag
 
     return NextResponse.json({
       report: ai.text || "No competitor research returned.",
-      sources: [],
+      sources: sourceLinks(results),
+      lane: "Competitor Analysis",
       peerCount: similarPeers.length,
       provider: ai.provider,
       model: ai.model,

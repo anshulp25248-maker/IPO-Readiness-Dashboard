@@ -52,7 +52,7 @@ export default function Top10CompaniesPage() {
 
   async function runAiSearch() {
     setIsSearching(true);
-    setAiStatus("Generating company analysis from the supplied query and AI model...");
+    setAiStatus("Running Other Companies Groq + live-feed lane...");
     setAiReport("");
     setAiSources([]);
 
@@ -78,7 +78,7 @@ export default function Top10CompaniesPage() {
       if (companies.length) {
         replaceCompanies(
           companies,
-          `${companies.length} AI-researched companies loaded. Use drawer factors and Run Scoring to rescore.`,
+          `${companies.length} live-researched companies loaded. Use drawer factors and Run Scoring to rescore.`,
         );
         setAiStatus(`${companies.length} companies found and loaded into the dashboard workspace.`);
       } else {

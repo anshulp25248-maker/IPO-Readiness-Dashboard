@@ -29,3 +29,21 @@ CDR_COMPANY_ANALYSIS_TAVILY_API_KEY=
 CDR_COMPREHENSIVE_CDR_GROQ_API_KEY=
 CDR_COMPREHENSIVE_CDR_TAVILY_API_KEY=
 ```
+
+## Dashboard Research Lanes
+
+Use these three additional Groq + Tavily pairs for the dashboard pages. Each page calls only its own lane so Director Profile, Competitors, and Other Companies stay independent and responsive.
+
+```env
+# Dashboard: Other Companies
+DASHBOARD_OTHER_COMPANIES_GROQ_API_KEY=
+DASHBOARD_OTHER_COMPANIES_TAVILY_API_KEY=
+
+# Dashboard: Director Profile
+DASHBOARD_DIRECTOR_PROFILE_GROQ_API_KEY=
+DASHBOARD_DIRECTOR_PROFILE_TAVILY_API_KEY=
+
+# Dashboard: Competitor Analysis
+DASHBOARD_COMPETITOR_ANALYSIS_GROQ_API_KEY=
+DASHBOARD_COMPETITOR_ANALYSIS_TAVILY_API_KEY=
+```
