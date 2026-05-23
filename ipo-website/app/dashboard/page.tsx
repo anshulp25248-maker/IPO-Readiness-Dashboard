@@ -8,7 +8,7 @@ import { useScout } from "../_components/ScoutProvider";
 type DashboardIconName = "building" | "sector" | "location" | "capital" | "eligible" | "score" | "weights" | "filing";
 
 function DashboardIcon({ name }: { name: DashboardIconName }) {
-  const className = "h-5 w-5 text-slate-950 drop-shadow-[0_5px_8px_rgba(146,105,21,0.35)]";
+  const className = "h-5 w-5 text-current drop-shadow-[0_5px_8px_rgba(15,23,42,0.18)]";
 
   if (name === "building") {
     return (
@@ -104,11 +104,23 @@ export default function DashboardPage() {
   } = useScout();
   const eligibleCount = rankedCompanies.filter((company) => company.status === "Active").length;
   const topInsight = aiCompanyInsights[topCompany.id];
+  const companyCards = [
+    { label: "CIN", value: topCompany.cin, icon: "building", bg: "#dbeafe", border: "#60a5fa", color: "#1d4ed8" },
+    { label: "Sector", value: topCompany.sector, icon: "sector", bg: "#dcfce7", border: "#4ade80", color: "#15803d" },
+    { label: "Location", value: `${topCompany.city}, ${topCompany.state}`, icon: "location", bg: "#fef3c7", border: "#f59e0b", color: "#b45309" },
+    { label: "Paid-up", value: topCompany.paidUpCapital, icon: "capital", bg: "#fae8ff", border: "#d946ef", color: "#a21caf" },
+  ] as const;
+  const pulseCards = [
+    { label: "Eligible Companies", value: eligibleCount.toString(), icon: "eligible", bg: "#ccfbf1", color: "#0f766e" },
+    { label: "Prime Score", value: `${scoreCompany(topCompany)}/100`, icon: "score", bg: "#dbeafe", color: "#1d4ed8" },
+    { label: "Weighted Factors", value: `${includedFactorCount} / 7`, icon: "weights", bg: "#ede9fe", color: "#6d28d9" },
+    { label: "Latest Filing", value: topCompany.lastFiling, icon: "filing", bg: "#ffedd5", color: "#c2410c" },
+  ] as const;
 
   return (
     <AppShell title="Dashboard">
       <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-        <GlassPanel className="min-h-[420px]">
+        <GlassPanel className="min-h-[420px] animate-soft-float">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">
@@ -125,15 +137,14 @@ export default function DashboardPage() {
           </div>
 
           <div className="mt-7 grid gap-3 sm:grid-cols-4">
-            {[
-              ["CIN", topCompany.cin, "building"],
-              ["Sector", topCompany.sector, "sector"],
-              ["Location", `${topCompany.city}, ${topCompany.state}`, "location"],
-              ["Paid-up", topCompany.paidUpCapital, "capital"],
-            ].map(([label, value, icon]) => (
-              <div key={label} className="min-w-0 overflow-hidden rounded-xl border border-white/45 bg-white/55 p-4">
-                <div className="flex items-center gap-2">
-                  <DashboardIcon name={icon as DashboardIconName} />
+            {companyCards.map(({ label, value, icon, bg, border, color }) => (
+              <div
+                key={label}
+                className="min-w-0 overflow-hidden rounded-xl border p-4 shadow-[0_10px_24px_rgba(15,23,42,0.10)] transition duration-300 hover:-translate-y-1"
+                style={{ backgroundColor: bg, borderColor: border }}
+              >
+                <div className="flex items-center gap-2" style={{ color }}>
+                  <DashboardIcon name={icon} />
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-800/65">{label}</p>
                 </div>
                 <p className="mt-2 break-words text-sm font-bold leading-6 text-slate-950">{value}</p>
@@ -150,18 +161,19 @@ export default function DashboardPage() {
           <GlassPanel>
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">Portfolio Pulse</p>
             <div className="mt-5 grid gap-3">
-              {[
-                ["Eligible Companies", eligibleCount.toString(), "eligible"],
-                ["Prime Score", `${scoreCompany(topCompany)}/100`, "score"],
-                ["Weighted Factors", `${includedFactorCount} / 7`, "weights"],
-                ["Latest Filing", topCompany.lastFiling, "filing"],
-              ].map(([label, value, icon]) => (
-                <div key={label} className="flex items-center justify-between gap-3 rounded-xl bg-white/55 px-4 py-3">
+              {pulseCards.map(({ label, value, icon, bg, color }) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 shadow-sm transition duration-300 hover:-translate-y-0.5"
+                  style={{ backgroundColor: bg }}
+                >
                   <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                    <DashboardIcon name={icon as DashboardIconName} />
+                    <span style={{ color }}>
+                      <DashboardIcon name={icon} />
+                    </span>
                     {label}
                   </span>
-                  <span className="font-bold text-slate-950">{value}</span>
+                  <span className="font-bold" style={{ color }}>{value}</span>
                 </div>
               ))}
             </div>
@@ -176,18 +188,18 @@ export default function DashboardPage() {
                 </h3>
               </div>
               {topInsight?.aiScore ? (
-                <span className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-black text-white">
+                <span className="rounded-xl bg-[#2563eb] px-3 py-2 text-sm font-black text-white shadow-lg shadow-blue-500/20">
                   {topInsight.aiScore}/100
                 </span>
               ) : null}
             </div>
-            <p className="mt-4 rounded-xl bg-white/55 px-4 py-3 text-sm font-semibold leading-6 text-slate-900">
+            <p className="mt-4 rounded-xl bg-[#dcfce7] px-4 py-3 text-sm font-semibold leading-6 text-slate-900">
               {topCompany.ipoReadinessMessage || topInsight?.rationale || aiScoreReport || scoringStatus || "Upload a file to run parser and screening."}
             </p>
             {topInsight?.redFlags?.length ? (
               <div className="mt-3 grid gap-2">
                 {topInsight.redFlags.slice(0, 3).map((flag) => (
-                  <p key={flag} className="rounded-xl border border-rose-200 bg-rose-50/80 px-4 py-2 text-sm font-bold text-rose-950">
+                  <p key={flag} className="rounded-xl border border-[#e8a8b2] bg-[#f8dce1] px-4 py-2 text-sm font-bold text-[#6d1525]">
                     {flag}
                   </p>
                 ))}
@@ -216,7 +228,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-6 flex justify-center">
-        <div className="w-full max-w-3xl rounded-2xl border border-white/45 bg-white/45 px-6 py-5 text-center shadow-[0_18px_50px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+        <div className="w-full max-w-3xl rounded-2xl border border-[#60a5fa] bg-[#dbeafe] px-6 py-5 text-center shadow-[0_18px_50px_rgba(37,99,235,0.18)] animate-glow-pulse">
           <p className="font-serif text-3xl font-black tracking-normal text-slate-950 sm:text-4xl">
             GreenFlow Ventures Ltd.
           </p>
@@ -231,7 +243,7 @@ export default function DashboardPage() {
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-slate-800/70">
             First Screening Layer Report
           </p>
-          <div className="mt-5 max-h-[680px] overflow-y-auto rounded-2xl border border-white/35 bg-white/35 p-4 shadow-inner">
+          <div className="mt-5 max-h-[680px] overflow-y-auto rounded-2xl border border-[#60a5fa] bg-white p-4 shadow-inner">
             <ReportViewer report={aiScoreReport} />
           </div>
         </GlassPanel>

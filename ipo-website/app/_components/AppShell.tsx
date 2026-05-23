@@ -1,7 +1,8 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { factorKeys, factorLabels } from "../_data/companies";
 import { useScout } from "./ScoutProvider";
 import { SmartScouterLogo } from "./SmartScouterBrand";
@@ -9,15 +10,58 @@ import { SmartScouterLogo } from "./SmartScouterBrand";
 type AppIconName = "dashboard" | "report" | "ranking" | "profile" | "competitors" | "upload" | "weights";
 
 const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
-  { label: "CDR", href: "/cdr", icon: "report" },
-  { label: "Other Companies", href: "/top-10-companies", icon: "ranking" },
-  { label: "Director Profile", href: "/director-profile", icon: "profile" },
-  { label: "Competitors", href: "/competitors", icon: "competitors" },
+  { label: "Dashboard", href: "/dashboard", icon: "dashboard", color: "#2563eb", soft: "#dbeafe" },
+  { label: "CDR", href: "/cdr", icon: "report", color: "#7c3aed", soft: "#ede9fe" },
+  { label: "Other Companies", href: "/top-10-companies", icon: "ranking", color: "#0f9f6e", soft: "#d1fae5" },
+  { label: "Director Profile", href: "/director-profile", icon: "profile", color: "#ea580c", soft: "#ffedd5" },
+  { label: "Competitors", href: "/competitors", icon: "competitors", color: "#db2777", soft: "#fce7f3" },
 ] as const;
 
+const pageThemes = {
+  "/dashboard": {
+    accent: "#2563eb",
+    accentDark: "#1e3a8a",
+    panel: "#dbeafe",
+    panelStrong: "#bfdbfe",
+    border: "#60a5fa",
+    shadow: "rgba(37, 99, 235, 0.22)",
+  },
+  "/cdr": {
+    accent: "#7c3aed",
+    accentDark: "#4c1d95",
+    panel: "#ede9fe",
+    panelStrong: "#ddd6fe",
+    border: "#a78bfa",
+    shadow: "rgba(124, 58, 237, 0.22)",
+  },
+  "/top-10-companies": {
+    accent: "#0f9f6e",
+    accentDark: "#065f46",
+    panel: "#d1fae5",
+    panelStrong: "#a7f3d0",
+    border: "#34d399",
+    shadow: "rgba(15, 159, 110, 0.2)",
+  },
+  "/director-profile": {
+    accent: "#ea580c",
+    accentDark: "#9a3412",
+    panel: "#ffedd5",
+    panelStrong: "#fed7aa",
+    border: "#fb923c",
+    shadow: "rgba(234, 88, 12, 0.2)",
+  },
+  "/competitors": {
+    accent: "#db2777",
+    accentDark: "#9d174d",
+    panel: "#fce7f3",
+    panelStrong: "#fbcfe8",
+    border: "#f472b6",
+    shadow: "rgba(219, 39, 119, 0.2)",
+  },
+};
+
 function AppIcon({ name, className = "h-5 w-5" }: { name: AppIconName; className?: string }) {
-  const iconClassName = `${className} drop-shadow-[0_5px_8px_rgba(146,105,21,0.35)]`;
+  const iconClassName = `${className} drop-shadow-[0_5px_8px_rgba(15,23,42,0.18)]`;
   if (name === "dashboard") {
     return (
       <svg className={iconClassName} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
@@ -99,7 +143,7 @@ function Hamburger() {
       type="button"
       aria-label="Main menu"
       onClick={() => setDrawerOpen(true)}
-      className="flex h-11 w-11 items-center justify-center rounded-xl border border-amber-400/70 bg-white/55 shadow-[0_14px_30px_rgba(146,105,21,0.22)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/70"
+      className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--panel-border)] bg-[var(--panel)] shadow-[0_14px_30px_var(--theme-shadow)] transition hover:-translate-y-0.5 hover:bg-[var(--panel-strong)]"
     >
       <span className="flex w-5 flex-col gap-1.5">
         <span className="h-0.5 rounded-full bg-slate-950" />
@@ -137,7 +181,7 @@ export function Drawer() {
         onClick={() => setDrawerOpen(false)}
       />
       <aside
-        className={`fixed left-0 top-0 z-50 h-full w-[min(92vw,390px)] overflow-y-auto border-r border-amber-400/70 bg-[linear-gradient(135deg,rgba(197,224,163,0.86),rgba(221,236,184,0.82),rgba(239,243,209,0.84))] p-5 shadow-[0_28px_90px_rgba(83,94,35,0.24)] backdrop-blur-2xl transition-transform duration-300 ${
+        className={`fixed left-0 top-0 z-50 h-full w-[min(92vw,390px)] overflow-y-auto border-r border-[var(--panel-border)] bg-white p-5 shadow-[0_28px_90px_var(--theme-shadow)] transition-transform duration-300 ${
           drawerOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -146,13 +190,13 @@ export function Drawer() {
           <button
             type="button"
             onClick={() => setDrawerOpen(false)}
-            className="rounded-xl border border-white/45 bg-white/50 px-3 py-2 text-sm font-black shadow backdrop-blur-xl transition hover:bg-white/65"
+            className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-2 text-sm font-black shadow transition hover:bg-[var(--panel-strong)]"
           >
             Close
           </button>
         </div>
 
-        <div className="mt-6 rounded-2xl border border-amber-400/60 bg-white/55 p-4 shadow-lg backdrop-blur-xl">
+        <div className="mt-6 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] p-4 shadow-lg">
           <p className="flex items-center gap-2 text-sm font-black text-slate-950">
             <AppIcon name="upload" className="h-5 w-5" />
             Upload Company File
@@ -160,7 +204,7 @@ export function Drawer() {
           <p className="mt-1 text-xs font-semibold leading-5 text-slate-800/75">
             Upload MCA Excel, CSV, TSV, or JSON company files.
           </p>
-          <label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-indigo-950">
+          <label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl bg-[var(--theme-accent)] px-4 py-3 text-sm font-black text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-[var(--theme-accent-dark)]">
             Upload File
             <input
               type="file"
@@ -176,15 +220,15 @@ export function Drawer() {
           <button
             type="button"
             onClick={resetCompanies}
-            className="mt-3 w-full rounded-xl border border-white/45 bg-white/45 px-4 py-3 text-sm font-black text-slate-950 shadow backdrop-blur-xl transition hover:bg-white/65"
+            className="mt-3 w-full rounded-xl border border-[var(--panel-border)] bg-[var(--panel-strong)] px-4 py-3 text-sm font-black text-slate-950 shadow transition hover:bg-[var(--panel)]"
           >
             Reset Sample Data
           </button>
           <p className="mt-3 text-xs font-semibold leading-5 text-slate-800">{uploadStatus}</p>
-          <p className="mt-2 text-xs font-black text-indigo-950">{companies.length} companies in workspace</p>
+          <p className="mt-2 text-xs font-black text-[var(--theme-accent-dark)]">{companies.length} companies in workspace</p>
         </div>
 
-        <div className="mt-5 rounded-2xl border border-amber-400/60 bg-white/55 p-4 shadow-lg backdrop-blur-xl">
+        <div className="mt-5 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] p-4 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <p className="flex items-center gap-2 text-sm font-black text-slate-950">
               <AppIcon name="weights" className="h-5 w-5" />
@@ -205,7 +249,7 @@ export function Drawer() {
               return (
                 <label
                   key={key}
-                  className="rounded-xl border border-white/45 bg-white/45 px-4 py-3 shadow backdrop-blur-xl"
+                  className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel-strong)] px-4 py-3 shadow"
                 >
                   <span className="flex items-center justify-between gap-3">
                     <span className="text-sm font-bold text-slate-950">{factorLabels[key]}</span>
@@ -222,7 +266,7 @@ export function Drawer() {
                     onChange={(event) => setPendingFactorWeight(key, Number(event.target.value))}
                     className="mt-3 h-2 w-full cursor-pointer appearance-none rounded-full accent-slate-950"
                     style={{
-                      background: `linear-gradient(90deg, rgb(15,23,42) 0%, rgb(15,23,42) ${fill}%, rgba(255,255,255,0.7) ${fill}%, rgba(255,255,255,0.7) 100%)`,
+                      background: `linear-gradient(90deg, var(--theme-accent) 0%, var(--theme-accent) ${fill}%, var(--panel) ${fill}%, var(--panel) 100%)`,
                     }}
                   />
                   <span className="mt-2 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.12em] text-slate-800/65">
@@ -244,16 +288,16 @@ export function Drawer() {
               router.push("/dashboard");
               void runScoring();
             }}
-            className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-indigo-950 disabled:cursor-not-allowed disabled:bg-slate-500 disabled:hover:translate-y-0"
+            className="mt-4 w-full rounded-xl bg-[var(--theme-accent)] px-4 py-3 text-sm font-black text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-[var(--theme-accent-dark)] disabled:cursor-not-allowed disabled:bg-slate-500 disabled:hover:translate-y-0"
           >
             {aiProgress.running ? "Scoring" : "Run Scoring"}
           </button>
           <p className="mt-3 text-xs font-semibold leading-5 text-slate-800">{scoringStatus}</p>
           {aiProgress.total ? (
             <div className="mt-3">
-              <div className="h-2 overflow-hidden rounded-full bg-white/40">
+              <div className="h-2 overflow-hidden rounded-full bg-[var(--panel)]">
                 <div
-                  className="h-full rounded-full bg-slate-950"
+                  className="h-full rounded-full bg-[var(--theme-accent)] animate-fill-sweep"
                   style={{ width: `${Math.round((aiProgress.completed / aiProgress.total) * 100)}%` }}
                 />
               </div>
@@ -264,13 +308,14 @@ export function Drawer() {
           ) : null}
         </div>
 
-        <nav className="mt-5 grid gap-2 rounded-2xl border border-amber-400/60 bg-white/55 p-3 shadow-lg backdrop-blur-xl">
+        <nav className="mt-5 grid gap-2 rounded-2xl border border-[var(--panel-border)] bg-white p-3 shadow-lg">
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               onClick={() => setDrawerOpen(false)}
-              className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-white/65"
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-black transition hover:-translate-y-0.5"
+              style={{ backgroundColor: item.soft, color: item.color }}
             >
               <AppIcon name={item.icon} className="h-5 w-5" />
               {item.label}
@@ -289,9 +334,25 @@ type AppShellProps = {
 };
 
 export function AppShell({ title, eyebrow = "Smart Scouter", children }: AppShellProps) {
+  const pathname = usePathname();
+  const theme = pageThemes[pathname as keyof typeof pageThemes] ?? pageThemes["/dashboard"];
+  const shellStyle = {
+    "--theme-accent": theme.accent,
+    "--theme-accent-dark": theme.accentDark,
+    "--panel": theme.panel,
+    "--panel-strong": theme.panelStrong,
+    "--panel-border": theme.border,
+    "--theme-shadow": theme.shadow,
+  } as CSSProperties;
+
   return (
-    <main className="min-h-screen bg-[linear-gradient(135deg,rgba(188,214,144,0.82),rgba(221,236,184,0.78),rgba(239,243,209,0.82))] px-4 py-5 text-slate-950 sm:px-6 lg:px-8">
-      <div className="min-h-screen transition duration-300">
+    <main className="relative min-h-screen overflow-hidden bg-white px-4 py-5 text-slate-950 sm:px-6 lg:px-8" style={shellStyle}>
+      <div className="research-candle-backdrop" aria-hidden="true">
+        {Array.from({ length: 18 }).map((_, index) => (
+          <span key={index} />
+        ))}
+      </div>
+      <div className="relative z-10 min-h-screen transition duration-300">
         <Drawer />
         <header className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -308,12 +369,19 @@ export function AppShell({ title, eyebrow = "Smart Scouter", children }: AppShel
               </div>
             </div>
           </div>
-          <nav className="hidden items-center gap-2 rounded-2xl border border-amber-400/70 bg-white/55 p-1 shadow-[0_18px_42px_rgba(146,105,21,0.18)] backdrop-blur-xl lg:flex">
+          <nav className="hidden items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-[0_18px_42px_rgba(15,23,42,0.12)] lg:flex">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex items-center gap-2 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-amber-400/70 hover:bg-white/70"
+                className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition hover:-translate-y-0.5 ${
+                  pathname === item.href ? "text-white shadow-lg" : "border-transparent"
+                }`}
+                style={{
+                  backgroundColor: pathname === item.href ? item.color : item.soft,
+                  borderColor: pathname === item.href ? item.color : "transparent",
+                  color: pathname === item.href ? "#ffffff" : item.color,
+                }}
               >
                 <AppIcon name={item.icon} className="h-4 w-4" />
                 {item.label}

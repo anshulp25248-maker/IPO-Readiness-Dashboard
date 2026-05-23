@@ -14,7 +14,7 @@ export function GlassPanel({
 }) {
   return (
     <section
-      className={`rounded-2xl border border-amber-400/60 bg-white/60 p-5 shadow-[0_20px_60px_rgba(99,111,45,0.16)] backdrop-blur-xl ${className}`}
+      className={`rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] p-5 shadow-[0_20px_60px_var(--theme-shadow)] transition duration-300 hover:-translate-y-0.5 hover:bg-[var(--panel-strong)] hover:shadow-[0_24px_70px_var(--theme-shadow)] ${className}`}
     >
       {children}
     </section>
@@ -23,9 +23,9 @@ export function GlassPanel({
 
 export function ScoreBadge({ score }: { score: number }) {
   return (
-    <div className="inline-flex min-w-24 items-center justify-center rounded-2xl border border-amber-400/60 bg-white/60 px-4 py-3 text-center shadow-[0_14px_28px_rgba(146,105,21,0.18)] backdrop-blur-xl">
-      <span className="text-3xl font-black text-slate-950">{score}</span>
-      <span className="ml-1 text-sm font-bold text-slate-800">/100</span>
+    <div className="inline-flex min-w-24 self-start items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-[var(--theme-accent)] px-4 py-3 text-center text-white shadow-[0_14px_28px_var(--theme-shadow)] animate-glow-pulse">
+      <span className="text-3xl font-black">{score}</span>
+      <span className="ml-1 text-sm font-bold text-white/80">/100</span>
     </div>
   );
 }
@@ -41,18 +41,18 @@ export function FactorGrid({ company }: { company: Company }) {
         const value = Number(company.factors[key] ?? 0);
 
         return (
-        <div key={key} className="min-h-32 rounded-xl border border-amber-400/45 bg-white/55 p-5 shadow-[0_10px_24px_rgba(146,105,21,0.10)] transition">
+        <div key={key} className="min-h-32 rounded-xl border border-[var(--panel-border)] bg-white p-5 shadow-[0_10px_24px_var(--theme-shadow)] transition duration-300 hover:-translate-y-1 hover:bg-[var(--panel-strong)]">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-black leading-5 text-slate-900">
               {factorLabels[key]}
             </p>
-            <p className="font-mono text-sm font-black text-indigo-950">
+            <p className="font-mono text-sm font-black text-[var(--theme-accent-dark)]">
               {Math.round(value)}/10
             </p>
           </div>
-          <div className="mt-3 h-2 rounded-full bg-white/30">
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--panel)]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-indigo-950 to-emerald-700"
+              className="h-full rounded-full bg-[var(--theme-accent)] animate-fill-sweep"
               style={{ width: `${value * 10}%` }}
             />
           </div>
@@ -70,12 +70,12 @@ export function FactorGrid({ company }: { company: Company }) {
 function BandBadge({ band }: { band?: Company["ipoReadinessBand"] }) {
   const styles =
     band === "IPO Ready"
-      ? "bg-emerald-900 text-white"
+      ? "bg-[var(--theme-accent)] text-white"
       : band === "Near Ready"
-        ? "bg-emerald-100 text-emerald-950"
+        ? "bg-[var(--panel-strong)] text-[var(--theme-accent-dark)]"
         : band === "Development Stage"
-          ? "bg-amber-100 text-amber-950"
-          : "bg-rose-100 text-rose-950";
+          ? "bg-[var(--panel)] text-[var(--theme-accent-dark)]"
+          : "bg-[#f5c8cf] text-[#6d1525]";
   return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${styles}`}>{band || "Pending"}</span>;
 }
 
@@ -86,11 +86,11 @@ export function CompanyTable({ limit, companies }: { limit?: number; companies?:
   const visibleCompanies = sourceCompanies.slice(0, limit ?? sourceCompanies.length);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-amber-400/60 bg-white/55 backdrop-blur-xl">
+    <div className="overflow-hidden rounded-2xl border border-[var(--panel-border)] bg-white shadow-[0_20px_60px_var(--theme-shadow)]">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1120px] table-fixed text-left">
           <thead>
-            <tr className="border-b border-white/25 text-xs uppercase tracking-[0.18em] text-slate-800/70">
+            <tr className="border-b border-[var(--panel-border)] bg-[var(--panel)] text-xs uppercase tracking-[0.18em] text-slate-800/70">
               <th className="w-[28%] px-5 py-4">Company</th>
               <th className="w-[14%] px-5 py-4">Sector</th>
               <th className="w-[12%] px-5 py-4">City</th>
@@ -107,7 +107,7 @@ export function CompanyTable({ limit, companies }: { limit?: number; companies?:
               return (
                 <Fragment key={company.id}>
                   <tr
-                    className="cursor-pointer border-b border-white/15 last:border-0 transition hover:bg-white/25"
+                    className="cursor-pointer border-b border-slate-100 last:border-0 transition hover:bg-[var(--panel)]"
                     onClick={() => setExpandedId(expanded ? null : company.id)}
                   >
                     <td className="px-5 py-4">
@@ -119,34 +119,34 @@ export function CompanyTable({ limit, companies }: { limit?: number; companies?:
                     <td className="px-5 py-4 leading-5 text-slate-900">{company.city}</td>
                     <td className="whitespace-nowrap px-5 py-4 font-semibold text-slate-900">{company.paidUpCapital}</td>
                     <td className="whitespace-nowrap px-5 py-4 text-right">
-                      <span className="inline-flex min-w-12 justify-center rounded-full bg-slate-950 px-3 py-1 text-sm font-bold text-white">
+                      <span className="inline-flex min-w-12 justify-center rounded-full bg-[var(--theme-accent)] px-3 py-1 text-sm font-bold text-white">
                         {company.status === "Scoring Failed" ? "NULL" : scoreCompany(company)}
                       </span>
                     </td>
                     <td className="px-5 py-4"><BandBadge band={company.ipoReadinessBand} /></td>
                     <td className="px-5 py-4 text-center">
-                      <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-rose-100 px-2 text-xs font-black text-rose-950">
+                      <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-[#f5c8cf] px-2 text-xs font-black text-[#6d1525]">
                         {company.redFlags?.length ?? 0}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-center">
-                      <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-amber-100 px-2 text-xs font-black text-amber-950">
+                      <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-[var(--panel-strong)] px-2 text-xs font-black text-[var(--theme-accent-dark)]">
                         {company.yellowFlags?.length ?? 0}
                       </span>
                     </td>
                   </tr>
                   {expanded ? (
-                    <tr key={`${company.id}-detail`} className="border-b border-white/15">
+                    <tr key={`${company.id}-detail`} className="border-b border-slate-100">
                       <td colSpan={8} className="px-5 py-5">
                         <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
                           <FactorGrid company={company} />
                           <div className="grid gap-3">
-                            <div className="rounded-xl bg-white/55 p-4">
+                            <div className="rounded-xl bg-[var(--panel)] p-4">
                               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-700">IPO Readiness</p>
                               <p className="mt-2 text-lg font-black text-slate-950">{company.ipoReadinessBand || "Pending"}</p>
                               <p className="mt-2 text-sm font-semibold leading-6 text-slate-800">{company.ipoReadinessMessage || company.aiScoringError || "Scoring is pending."}</p>
                             </div>
-                            <div className="rounded-xl bg-white/55 p-4">
+                            <div className="rounded-xl bg-[var(--panel)] p-4">
                               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-700">Flags</p>
                               {[...(company.redFlags ?? []), ...(company.yellowFlags ?? [])].length ? (
                                 <div className="mt-3 grid gap-2">
@@ -154,7 +154,7 @@ export function CompanyTable({ limit, companies }: { limit?: number; companies?:
                                     <p
                                       key={flag}
                                       className={`rounded-lg px-3 py-2 text-xs font-bold leading-5 ${
-                                        flag.startsWith("RF") ? "bg-rose-50 text-rose-950" : "bg-amber-50 text-amber-950"
+                                        flag.startsWith("RF") ? "bg-[#f8dce1] text-[#6d1525]" : "bg-[var(--panel-strong)] text-[var(--theme-accent-dark)]"
                                       }`}
                                     >
                                       {flag}: {flagMessages[flag] || "Review required."}
@@ -165,7 +165,7 @@ export function CompanyTable({ limit, companies }: { limit?: number; companies?:
                                 <p className="mt-3 text-sm font-bold text-slate-800">No flags detected. Clean screening profile.</p>
                               )}
                             </div>
-                            <div className="rounded-xl bg-white/55 p-4">
+                            <div className="rounded-xl bg-[var(--panel)] p-4">
                               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-700">Status Verification</p>
                               <p className="mt-2 text-sm font-semibold leading-6 text-slate-800">
                                 {company.statusVerification
