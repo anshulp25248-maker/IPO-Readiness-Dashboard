@@ -4,10 +4,12 @@ type FeatureCardProps = {
   title: string;
   href: string;
   icon: "dashboard" | "report" | "ranking" | "profile" | "competitors";
+  color: string;
+  soft: string;
 };
 
 function FeatureIcon({ icon }: { icon: FeatureCardProps["icon"] }) {
-  const iconClass = "h-10 w-10 sm:h-12 sm:w-12 lg:h-16 lg:w-16";
+  const iconClass = "h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12";
 
   if (icon === "dashboard") {
     return (
@@ -59,14 +61,16 @@ function FeatureIcon({ icon }: { icon: FeatureCardProps["icon"] }) {
   );
 }
 
-export function FeatureCard({ title, href, icon }: FeatureCardProps) {
+export function FeatureCard({ title, href, icon, color, soft }: FeatureCardProps) {
   return (
     <Link
       href={href}
-      className="group flex min-h-28 w-full flex-col items-center justify-center gap-3 rounded-2xl border border-white/40 bg-white/25 px-5 py-6 text-center text-slate-950 shadow-[0_20px_60px_rgba(15,23,42,0.16)] backdrop-blur-xl transition duration-300 ease-out hover:-translate-y-1 hover:scale-[1.025] hover:border-white/75 hover:bg-white/35 hover:text-indigo-950 hover:shadow-[0_24px_80px_rgba(30,64,175,0.24)] focus:outline-none focus:ring-4 focus:ring-white/45 sm:min-h-36 sm:gap-4 sm:px-6 sm:py-8 lg:min-h-44"
+      className="group relative flex min-h-24 w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border px-4 py-4 text-center shadow-[0_16px_44px_rgba(15,23,42,0.12)] transition duration-300 ease-out hover:-translate-y-1 hover:scale-[1.025] hover:shadow-[0_24px_80px_rgba(15,23,42,0.18)] focus:outline-none focus:ring-4 focus:ring-slate-200 sm:min-h-28 sm:gap-3 sm:px-5 sm:py-5 lg:min-h-32"
+      style={{ backgroundColor: soft, borderColor: color, color }}
     >
+      <span className="absolute left-0 top-0 h-1.5 w-full transition duration-300 group-hover:h-2.5" style={{ backgroundColor: color }} />
       <FeatureIcon icon={icon} />
-      <span className="text-xl font-bold tracking-wide transition duration-300 sm:text-2xl">{title}</span>
+      <span className="text-base font-black tracking-wide transition duration-300 sm:text-lg lg:text-xl">{title}</span>
     </Link>
   );
 }

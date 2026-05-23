@@ -28,35 +28,42 @@ export function SmartScouterLogo({ compact = false }: { compact?: boolean }) {
 function IntroRocketScene() {
   return (
     <div className="intro-scene" aria-hidden="true">
-      <div className="intro-screen intro-screen-left">
-        <span />
-        <span />
-        <span />
+      <div className="intro-board">
+        <div className="intro-board-header">
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="intro-screen intro-screen-left">
+          <span />
+          <span />
+          <span />
+        </div>
+        <div className="intro-screen intro-screen-right">
+          <span />
+          <span />
+          <span />
+        </div>
+        <svg viewBox="0 0 360 360" className="intro-rocket" role="img">
+          <path d="M180 38c46 36 70 84 70 144 0 54-26 100-70 140-44-40-70-86-70-140 0-60 24-108 70-144Z" fill="#f8fafc" />
+          <path d="M180 38c46 36 70 84 70 144H110c0-60 24-108 70-144Z" fill="#dbeafe" />
+          <path d="M117 216 56 292l75-24" fill="#f59e0b" />
+          <path d="M243 216 304 292l-75-24" fill="#f59e0b" />
+          <circle cx="180" cy="150" r="42" fill="#0f172a" />
+          <circle cx="180" cy="150" r="32" fill="#93c5fd" />
+          <circle cx="180" cy="142" r="10" fill="#2563eb" />
+          <path d="M160 170c9-12 31-12 40 0" stroke="#2563eb" strokeWidth="8" strokeLinecap="round" />
+          <path d="M150 248h60l-30 66-30-66Z" fill="#ef4444" />
+          <path d="M163 292c4 13 10 23 17 31 7-8 13-18 17-31h-34Z" fill="#fb923c" />
+          <path d="M140 103h80" stroke="#0f172a" strokeWidth="8" strokeLinecap="round" opacity="0.16" />
+        </svg>
+        <div className="intro-flame" />
+        <div className="intro-graph intro-graph-one" />
+        <div className="intro-graph intro-graph-two" />
+        <div className="intro-company-dot intro-dot-one" />
+        <div className="intro-company-dot intro-dot-two" />
+        <div className="intro-company-dot intro-dot-three" />
       </div>
-      <div className="intro-screen intro-screen-right">
-        <span />
-        <span />
-        <span />
-      </div>
-      <svg viewBox="0 0 360 360" className="intro-rocket" role="img">
-        <path d="M180 38c46 36 70 84 70 144 0 54-26 100-70 140-44-40-70-86-70-140 0-60 24-108 70-144Z" fill="#f8fafc" />
-        <path d="M180 38c46 36 70 84 70 144H110c0-60 24-108 70-144Z" fill="#dff0b8" />
-        <path d="M117 216 56 292l75-24" fill="#f59e0b" />
-        <path d="M243 216 304 292l-75-24" fill="#f59e0b" />
-        <circle cx="180" cy="150" r="42" fill="#0f172a" />
-        <circle cx="180" cy="150" r="32" fill="#9ee7c8" />
-        <circle cx="180" cy="142" r="10" fill="#172554" />
-        <path d="M160 170c9-12 31-12 40 0" stroke="#172554" strokeWidth="8" strokeLinecap="round" />
-        <path d="M150 248h60l-30 66-30-66Z" fill="#ef4444" />
-        <path d="M163 292c4 13 10 23 17 31 7-8 13-18 17-31h-34Z" fill="#fb923c" />
-        <path d="M140 103h80" stroke="#0f172a" strokeWidth="8" strokeLinecap="round" opacity="0.16" />
-      </svg>
-      <div className="intro-flame" />
-      <div className="intro-graph intro-graph-one" />
-      <div className="intro-graph intro-graph-two" />
-      <div className="intro-company-dot intro-dot-one" />
-      <div className="intro-company-dot intro-dot-two" />
-      <div className="intro-company-dot intro-dot-three" />
     </div>
   );
 }

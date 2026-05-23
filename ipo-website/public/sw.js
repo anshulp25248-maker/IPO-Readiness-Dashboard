@@ -1,4 +1,4 @@
-const CACHE_NAME = "smart-scouter-v2";
+const CACHE_NAME = "smart-scouter-v3";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/offline.html"];
 
 self.addEventListener("install", (event) => {

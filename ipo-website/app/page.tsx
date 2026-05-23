@@ -1,20 +1,23 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { FeatureCard } from "./_components/FeatureCard";
 import { Drawer } from "./_components/AppShell";
 import { useScout } from "./_components/ScoutProvider";
 import { SmartScouterLogo } from "./_components/SmartScouterBrand";
 
 const primaryCards = [
-  { title: "Dashboard", href: "/dashboard", icon: "dashboard" },
-  { title: "CDR", href: "/cdr", icon: "report" },
-  { title: "Other Companies", href: "/top-10-companies", icon: "ranking" },
+  { title: "Dashboard", href: "/dashboard", icon: "dashboard", color: "#2563eb", soft: "#dbeafe" },
+  { title: "CDR", href: "/cdr", icon: "report", color: "#7c3aed", soft: "#ede9fe" },
+  { title: "Other Companies", href: "/top-10-companies", icon: "ranking", color: "#0f9f6e", soft: "#d1fae5" },
 ] as const;
 
 const secondaryCards = [
-  { title: "Director Profile", href: "/director-profile", icon: "profile" },
-  { title: "Competitors", href: "/competitors", icon: "competitors" },
+  { title: "Director Profile", href: "/director-profile", icon: "profile", color: "#ea580c", soft: "#ffedd5" },
+  { title: "Competitors", href: "/competitors", icon: "competitors", color: "#db2777", soft: "#fce7f3" },
 ] as const;
+
+const homeCards = [...primaryCards, ...secondaryCards] as const;
 
 function HamburgerButton() {
   const { setDrawerOpen } = useScout();
@@ -24,7 +27,7 @@ function HamburgerButton() {
       type="button"
       aria-label="Open menu"
       onClick={() => setDrawerOpen(true)}
-      className="absolute left-5 top-5 z-10 flex h-12 w-12 cursor-pointer items-center justify-center rounded-2xl border border-white/35 bg-white/15 shadow-lg backdrop-blur-xl transition duration-300 hover:-translate-y-0.5 hover:bg-white/25 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-white/40"
+      className="absolute left-5 top-5 z-20 flex h-12 w-12 cursor-pointer items-center justify-center rounded-2xl border border-blue-300 bg-blue-50 shadow-lg transition duration-300 hover:-translate-y-0.5 hover:bg-blue-100 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-100"
     >
       <span className="flex w-5 flex-col gap-1.5">
         <span className="h-0.5 rounded-full bg-slate-950" />
@@ -37,39 +40,46 @@ function HamburgerButton() {
 
 export default function SmartScouterHome() {
   return (
-    <main className="relative flex min-h-screen overflow-x-hidden bg-[linear-gradient(135deg,rgba(188,214,144,0.82),rgba(221,236,184,0.78),rgba(239,243,209,0.82))] px-4 py-8 text-slate-950 sm:px-8 sm:py-10">
+    <main className="relative flex min-h-screen overflow-hidden bg-white px-4 py-8 text-slate-950 sm:px-8 sm:py-10">
+      <div
+        className="research-candle-backdrop"
+        style={
+          {
+            "--theme-accent": "#2563eb",
+            "--theme-accent-dark": "#1e3a8a",
+            "--theme-shadow": "rgba(37, 99, 235, 0.18)",
+          } as CSSProperties
+        }
+        aria-hidden="true"
+      >
+        {Array.from({ length: 18 }).map((_, index) => (
+          <span key={index} />
+        ))}
+      </div>
       <Drawer />
       <HamburgerButton />
 
-      <section className="mx-auto flex w-full max-w-6xl animate-page-enter flex-col items-center justify-start gap-8 pt-24 sm:gap-12 sm:pt-20 lg:pt-14">
-        <header className="space-y-4 text-center sm:space-y-5">
+      <section className="relative z-10 mx-auto flex w-full max-w-6xl animate-page-enter flex-col items-center justify-start gap-5 pt-20 sm:gap-7 sm:pt-16 lg:pt-10">
+        <header className="space-y-3 text-center sm:space-y-4">
           <div className="flex justify-center">
             <SmartScouterLogo />
           </div>
-          <h1 className="bg-gradient-to-r from-slate-950 via-indigo-950 to-purple-900 bg-clip-text font-serif text-5xl font-bold tracking-normal text-transparent sm:text-7xl lg:text-8xl">
+          <h1 className="font-serif text-4xl font-bold tracking-normal text-slate-950 sm:text-6xl lg:text-7xl">
             Smart Scouter
           </h1>
-          <p className="text-base font-medium text-slate-800/80 sm:text-xl">
+          <p className="text-sm font-medium text-slate-800/80 sm:text-lg">
             Company Search and Investment Readiness Engine
           </p>
         </header>
 
-        <nav className="grid w-full gap-4 sm:gap-6">
-          <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
-            {primaryCards.map((card) => (
-              <FeatureCard key={card.href} {...card} />
-            ))}
-          </div>
-
-          <div className="mx-auto grid w-full gap-4 sm:gap-6 lg:max-w-3xl lg:grid-cols-2">
-            {secondaryCards.map((card) => (
-              <FeatureCard key={card.href} {...card} />
-            ))}
-          </div>
+        <nav className="grid w-full grid-cols-2 gap-3 rounded-[1.25rem] border border-slate-200 bg-white p-3 shadow-[0_24px_80px_rgba(15,23,42,0.12)] sm:grid-cols-5 sm:gap-4 sm:p-4 lg:gap-5 lg:p-5">
+          {homeCards.map((card) => (
+            <FeatureCard key={card.href} {...card} />
+          ))}
         </nav>
 
         <div className="text-center">
-          <p className="font-serif text-3xl font-black tracking-normal text-slate-950 sm:text-4xl">
+          <p className="font-serif text-2xl font-black tracking-normal text-slate-950 sm:text-3xl">
             GreenFlow Ventures Ltd.
           </p>
           <p className="mt-2 text-xs font-black uppercase tracking-[0.28em] text-slate-800/70">

@@ -293,8 +293,10 @@ body {
   place-items: center;
   overflow: hidden;
   background:
-    radial-gradient(circle at 50% 44%, rgba(255, 255, 255, 0.92), rgba(223, 240, 184, 0.86) 38%, rgba(188, 214, 144, 0.92) 100%),
-    linear-gradient(135deg, #dfe9b8, #eef3d1);
+    linear-gradient(90deg, rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    #ffffff;
+  background-size: 72px 72px, 72px 72px, auto;
   animation: intro-fade-away 4.7s ease both;
 }
 
@@ -318,14 +320,49 @@ body {
   position: relative;
   width: min(88vw, 720px);
   height: min(62vh, 560px);
+  display: grid;
+  place-items: center;
+}
+
+.intro-board {
+  position: relative;
+  width: min(88vw, 680px);
+  height: min(58vh, 500px);
+  overflow: hidden;
+  border: 1px solid #60a5fa;
+  border-radius: 28px;
+  background:
+    linear-gradient(90deg, rgba(37, 99, 235, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(37, 99, 235, 0.07) 1px, transparent 1px),
+    #dbeafe;
+  background-size: 48px 48px, 48px 48px, auto;
+  box-shadow: 0 28px 90px rgba(37, 99, 235, 0.24);
+}
+
+.intro-board-header {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 18px;
+  display: flex;
+  gap: 8px;
+  z-index: 5;
+}
+
+.intro-board-header span {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: #2563eb;
+  box-shadow: 18px 0 0 #0f9f6e, 36px 0 0 #db2777;
 }
 
 .intro-rocket {
   position: absolute;
   left: 50%;
-  bottom: 8%;
+  bottom: 7%;
   z-index: 2;
-  width: min(58vw, 340px);
+  width: min(52vw, 310px);
   filter: drop-shadow(0 34px 46px rgba(15, 23, 42, 0.22));
   transform-origin: 50% 85%;
   animation: intro-rocket-launch 4.4s cubic-bezier(0.17, 0.74, 0.22, 1) both;
@@ -349,23 +386,22 @@ body {
   z-index: 1;
   display: grid;
   gap: 10px;
-  width: min(34vw, 210px);
-  border: 1px solid rgba(250, 204, 21, 0.65);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.62);
+  width: min(30vw, 190px);
+  border: 1px solid #93c5fd;
+  border-radius: 18px;
+  background: #ffffff;
   padding: 18px;
-  box-shadow: 0 24px 58px rgba(99, 111, 45, 0.16);
-  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 48px rgba(37, 99, 235, 0.16);
   animation: intro-screen-pop 4.4s ease both;
 }
 
 .intro-screen-left {
-  left: 0;
-  top: 26%;
+  left: clamp(16px, 5vw, 52px);
+  top: 24%;
 }
 
 .intro-screen-right {
-  right: 0;
+  right: clamp(16px, 5vw, 52px);
   top: 34%;
   animation-delay: 0.18s;
 }
@@ -374,7 +410,7 @@ body {
   display: block;
   height: 12px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #172554, #047857);
+  background: #2563eb;
 }
 
 .intro-screen span:nth-child(2) {
@@ -390,8 +426,8 @@ body {
   z-index: 3;
   width: 96px;
   height: 54px;
-  border-left: 4px solid #172554;
-  border-bottom: 4px solid #172554;
+  border-left: 4px solid #1e3a8a;
+  border-bottom: 4px solid #1e3a8a;
   opacity: 0;
   animation: intro-dot-scan 4.4s ease both;
 }
@@ -401,17 +437,17 @@ body {
   position: absolute;
   inset: 8px 0 8px 8px;
   clip-path: polygon(0 76%, 26% 54%, 45% 62%, 70% 26%, 100% 8%, 100% 100%, 0 100%);
-  background: linear-gradient(135deg, rgba(52, 211, 153, 0.82), rgba(15, 23, 42, 0.2));
+  background: linear-gradient(135deg, rgba(15, 159, 110, 0.82), rgba(37, 99, 235, 0.28));
 }
 
 .intro-graph-one {
-  left: 20%;
-  bottom: 24%;
+  left: 18%;
+  bottom: 18%;
 }
 
 .intro-graph-two {
-  right: 18%;
-  bottom: 19%;
+  right: 17%;
+  bottom: 17%;
   animation-delay: 0.32s;
 }
 
@@ -421,27 +457,27 @@ body {
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: #0f172a;
-  box-shadow: 0 0 0 8px rgba(52, 211, 153, 0.18);
+  background: #2563eb;
+  box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.16);
   opacity: 0;
   animation: intro-dot-scan 4.4s ease both;
 }
 
 .intro-dot-one {
-  left: 28%;
+  left: 30%;
   top: 22%;
   animation-delay: 0.42s;
 }
 
 .intro-dot-two {
-  right: 26%;
-  top: 24%;
+  right: 29%;
+  top: 25%;
   animation-delay: 0.58s;
 }
 
 .intro-dot-three {
   left: 48%;
-  top: 18%;
+  top: 15%;
   animation-delay: 0.74s;
 }
 
